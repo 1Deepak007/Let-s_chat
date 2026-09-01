@@ -1,0 +1,608 @@
+const fs = require('fs');
+
+const chatPageContent = `import React, { useState, useEffect, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import { getMessages, sendMessage, editMessage, deleteMessage } from '../api/chatApi';
+import { getFriends } from '../api/friendsApi';
+import { toast } from 'react-toastify';
+import { useSocket } from '../contexts/SocketContext';
+import { useAuth } from '../contexts/AuthContext';
+import ChatHeader from '../components/chat/ChatHeader';
+import MainLayout from '../components/MainLayout';
+import MessageItem from '../components/chat/MessageItem';
+import MessageInput from '../components/chat/MessageInput';
+import EditMessageModal from '../components/chat/EditMessageModal';
+import LoadingSpinner from '../components/common/LoadingSpinner';
+
+const ChatPage = () => {
+    const { user } = useAuth();
+    const { socket, isConnected, joinRoom, emitTyping, onlineUsers } = useSocket();
+    const [searchParams] = useSearchParams();
+    const [friends, setFriends] = useState([]);
+    const [selectedFriend, setSelectedFriend] = useState(null);
+    const [messages, setMessages] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [sending, setSending] = useState(false);
+    const [editingMessage, setEditingMessage] = useState(null);
+    const messagesEndRef = useRef(null);
+
+    const [isTyping, setIsTyping] = useState(false);
+    const [typingTimeout, setTypingTimeout] = useState(null);
+
+    useEffect(() => {
+        fetchFriends();
+    }, []);
+
+    useEffect(() => {
+        const friendId = searchParams.get('userId');
+        if (friendId && friends.length > 0) {
+            const friend = friends.find(f => f._id === friendId);
+            if (friend) {
+                setSelectedFriend(friend);
+                fetchMessages(friendId);
+            }
+        }
+    }, [searchParams, friends]);
+
+    useEffect(() => {
+        if (user?._id) {
+            joinRoom(user._id);
+        }
+    }, [user, joinRoom]);
+
+    useEffect(() => {
+        if (!socket) return;
+
+        const handleNewMessage = (newMessage) => {
+            if (
+                (newMessage.sender === selectedFriend?._id && newMessage.receiver === user._id) ||
+                (newMessage.sender === user._id && newMessage.receiver === selectedFriend?._id)
+            ) {
+                setMessages(prev => [...prev, newMessage]);
+            }
+        };
+
+        const handleMessageEdited = (updatedMessage) => {
+            setMessages(prev =>
+                prev.map(msg =>
+                    msg._id === updatedMessage._id ? updatedMessage : msg
+                )
+            );
+        };
+
+        const handleMessageDeleted = (messageId) => {
+            setMessages(prev => prev.filter(msg => msg._id !== messageId));
+        };
+
+        socket.on('newMessage', handleNewMessage);
+        socket.on('messageEdited', handleMessageEdited);
+        socket.on('messageDeleted', handleMessageDeleted);
+
+        return () => {
+            socket.off('newMessage', handleNewMessage);
+            socket.off('messageEdited', handleMessageEdited);
+            socket.off('messageDeleted', handleMessageDeleted);
+        };
+    }, [socket, selectedFriend, user]);
+
+    useEffect(() => {
+        scrollToBottom();
+    }, [messages]);
+
+    const scrollToBottom = () => {
+        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    };
+
+    const fetchFriends = async () => {
+        try {
+            const response = await getFriends(user._id);
+            setFriends(response.data.friends || []);
+        } catch (error) {
+            toast.error('Failed to load friends');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const fetchMessages = async (friendId) => {
+        setLoading(true);
+        try {
+            const response = await getMessages({
+                senderId: user._id,
+                receiverId: friendId
+            });
+            setMessages(response.data.messages || []);
+        } catch (error) {
+            toast.error('Failed to load messages');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleSendMessage = async (content) => {
+        setSending(true);
+        try {
+            const response = await sendMessage({
+                sender: user._id,
+                receiver: selectedFriend._id,
+                content,
+                messageType: 'text'
+            });
+            const newMessage = response.data.chatMessage;
+            setMessages(prev => [...prev, newMessage]);
+
+            // Emit via socket for real-time
+            if (socket && isConnected) {
+                socket.emit('sendMessage', newMessage);
+            }
+        } catch (error) {
+            toast.error('Failed to send message');
+        } finally {
+            setSending(false);
+        }
+        // Stop typing indicator
+        if (emitTyping && selectedFriend?._id) {
+            emitTyping(selectedFriend._id, false);
+        } else if (socket && isConnected && selectedFriend?._id) {
+            socket.emit('typing', { receiverId: selectedFriend._id, isTyping: false });
+        }
+    };
+
+    const handleEditMessage = async (messageId, newContent) => {
+        try {
+            const response = await editMessage({
+                messageId,
+                newContent,
+                userId: user._id
+            });
+
+            const updatedMessage = response.data.updatedMessage;
+            setMessages(prev =>
+                prev.map(msg =>
+                    msg._id === messageId ? updatedMessage : msg
+                )
+            );
+
+            if (socket && isConnected) {
+                socket.emit('editMessage', updatedMessage);
+            }
+
+            setEditingMessage(null);
+            toast.success('Message edited');
+        } catch (error) {
+            toast.error('Failed to edit message');
+        }
+    };
+
+    const handleDeleteMessage = async (messageId) => {
+        if (!window.confirm('Delete this message?')) return;
+
+        try {
+            await deleteMessage({
+                messageId,
+                senderId: user._id
+            });
+
+            setMessages(prev => prev.filter(msg => msg._id !== messageId));
+
+            if (socket && isConnected) {
+                socket.emit('deleteMessage', { messageId, senderId: user._id });
+            }
+
+            toast.success('Message deleted');
+        } catch (error) {
+            toast.error('Failed to delete message');
+        }
+    };
+
+    const handleSelectFriend = (friend) => {
+        setSelectedFriend(friend);
+        fetchMessages(friend._id);
+    };
+
+    const handleTyping = () => {
+        if (selectedFriend?._id) {
+            if (emitTyping) {
+                emitTyping(selectedFriend._id, true);
+            } else if (socket && isConnected) {
+                socket.emit('typing', { receiverId: selectedFriend._id, isTyping: true });
+            }
+
+            // Clear existing timeout
+            if (typingTimeout) clearTimeout(typingTimeout);
+
+            // Set timeout to stop typing after 2 seconds of inactivity
+            const timeout = setTimeout(() => {
+                if (emitTyping) {
+                    emitTyping(selectedFriend._id, false);
+                } else if (socket && isConnected) {
+                    socket.emit('typing', { receiverId: selectedFriend._id, isTyping: false });
+                }
+            }, 2000);
+            setTypingTimeout(timeout);
+        }
+    };
+
+    useEffect(() => {
+        if (!socket) return;
+
+        const handleUserTyping = ({ userId, isTyping }) => {
+            if (userId === selectedFriend?._id) {
+                setIsTyping(isTyping);
+            }
+        };
+
+        socket.on('userTyping', handleUserTyping);
+
+        return () => {
+            socket.off('userTyping', handleUserTyping);
+        };
+    }, [socket, selectedFriend]);
+
+    if (loading) {
+        return (
+            <MainLayout>
+                <div className="flex items-center justify-center h-64">
+                    <LoadingSpinner size="lg" />
+                </div>
+            </MainLayout>
+        );
+    }
+
+    return (
+        <MainLayout>
+            <div className="max-w-6xl mx-auto h-[calc(100vh-8rem)]">
+                <div className="flex h-full overflow-hidden bg-white border border-gray-200 rounded-lg shadow-md dark:bg-gray-900 dark:border-gray-800">
+                    {/* Friends List */}
+                    <div className="flex flex-col w-64 border-r border-gray-200 sm:w-72 md:w-80 bg-gray-50 dark:bg-gray-900 dark:border-gray-800">
+                        <div className="p-4 bg-white border-b border-gray-200 dark:bg-gray-900 dark:border-gray-800">
+                            <h3 className="font-semibold text-gray-800 dark:text-gray-100">Chats</h3>
+                        </div>
+                        <div className="flex-1 p-2 space-y-1 overflow-y-auto">
+                            {friends.length === 0 ? (
+                                <p className="py-4 text-sm text-center text-gray-500 dark:text-gray-400">
+                                    No friends yet
+                                </p>
+                            ) : (
+                                friends.map((friend) => {
+                                    const isActive = selectedFriend?._id === friend._id;
+                                    return (
+                                        <button
+                                            key={friend._id}
+                                            onClick={() => handleSelectFriend(friend)}
+                                            className={`w-full flex items - center gap - 3 p - 3 rounded - lg transition text - left ${
+    isActive
+        ? 'bg-primary-50 dark:bg-primary-900/30 text-primary-600 dark:text-primary-400 font-semibold shadow-sm'
+        : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800/60'
+} `}
+                                        >
+                                            <div className="relative flex-shrink-0">
+                                                <img
+                                                    src={friend.profilePicture || `https://ui-avatars.com/api/?name=${friend.firstname}&background=3b82f6&color=fff`}
+alt = { friend.firstname }
+className = "object-cover w-10 h-10 rounded-full"
+    />
+    { onlineUsers?.includes(friend._id) && (
+        <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-500 border-2 border-white rounded-full dark:border-gray-900" />
+    )}
+                                            </div >
+    <div className="flex-1 min-w-0">
+        <p className={`text-sm truncate ${isActive
+                ? 'font-semibold text-primary-600 dark:text-primary-400'
+                : 'font-medium text-gray-900 dark:text-gray-100'
+            }`}>
+            {friend.firstname} {friend.lastname || ''}
+        </p>
+        <p className="text-xs text-gray-500 truncate dark:text-gray-400">
+            @{friend.username}
+        </p>
+    </div>
+                                        </button >
+                                    );
+                                })
+                            )}
+                        </div >
+                    </div >
+
+    {/* Chat Area */ }
+    < div className = "flex flex-col flex-1 bg-white dark:bg-gray-900" >
+    {
+        selectedFriend?(
+                            <>
+                                <ChatHeader
+                                    friend={selectedFriend}
+                                    onBack={() => setSelectedFriend(null)}
+                                    isOnline={onlineUsers?.includes(selectedFriend._id)}
+                                />
+
+                                <div className="flex-1 p-4 overflow-y-auto bg-gray-50 dark:bg-gray-950">
+                                    {messages.map((message) => (
+                                        <MessageItem
+                                            key={message._id}
+                                            message={message}
+                                            isOwn={message.sender === user._id}
+                                            onEdit={setEditingMessage}
+                                            onDelete={handleDeleteMessage}
+                                        />
+                                    ))}
+                                    {isTyping && (
+                                        <div className="flex items-center gap-2 mb-2 text-xs italic text-gray-500 dark:text-gray-400">
+                                            <span>{selectedFriend.firstname} is typing...</span>
+                                        </div>
+                                    )}
+                                    <div ref={messagesEndRef} />
+                                </div>
+
+                                <MessageInput
+                                    onSend={handleSendMessage}
+                                    onTyping={handleTyping}
+                                    disabled={sending || !isConnected}
+                                />
+                            </>
+                        ) : (
+    <div className="flex items-center justify-center flex-1 p-8 text-gray-500 bg-gray-50 dark:bg-gray-950 dark:text-gray-400">
+        <div className="text-center">
+            <p className="mb-4 text-6xl">💬</p>
+            <p className="text-lg font-medium text-gray-800 dark:text-gray-200">Select a friend to start chatting</p>
+            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">or add new friends from the Friends page</p>
+        </div>
+    </div>
+)}
+                    </div >
+                </div >
+            </div >
+
+    {/* Edit Message Modal */ }
+{
+    editingMessage && (
+        <EditMessageModal
+            message={editingMessage}
+            onSave={handleEditMessage}
+            onClose={() => setEditingMessage(null)}
+        />
+    )
+}
+        </MainLayout >
+    );
+};
+
+export default ChatPage;
+`;
+
+const chatHeaderContent = `import React from 'react';
+import { FiArrowLeft } from 'react-icons/fi';
+import OnlineStatus from '../common/OnlineStatus';
+
+const ChatHeader = ({ friend, onBack, isOnline }) => {
+    return (
+        <div className="flex items-center justify-between p-4 bg-white border-b border-gray-200 dark:bg-gray-900 dark:border-gray-700">
+            <div className="flex items-center gap-3">
+                <button
+                    onClick={onBack}
+                    className="p-1.5 text-gray-600 rounded-lg md:hidden dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition"
+                    aria-label="Back to chats"
+                >
+                    <FiArrowLeft className="w-5 h-5" />
+                </button>
+                <img
+                    src={friend?.profilePicture || \`https://ui-avatars.com/api/?name=\${friend?.firstname}&background=3b82f6&color=fff\`}
+                alt={friend?.firstname}
+                className="object-cover w-10 h-10 rounded-full"
+                />
+                <div>
+                    <p className="font-medium text-gray-800 dark:text-gray-100">{friend?.firstname} {friend?.lastname || ''}</p>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">@{friend?.username}</p>
+                </div>
+            </div>
+            <div>
+                <OnlineStatus isOnline={isOnline} lastSeen={friend?.lastSeen} />
+            </div>
+        </div>
+    );
+};
+
+export default ChatHeader;
+`;
+
+const messageItemContent = `import React, { useState } from 'react';
+import { format } from 'date-fns';
+import { FiEdit2, FiTrash2 } from 'react-icons/fi';
+
+const MessageItem = ({ message, isOwn, onEdit, onDelete }) => {
+    const [showActions, setShowActions] = useState(false);
+
+    const formattedTime = (() => {
+        try {
+            const date = message.timestamp || message.createdAt;
+            return date ? format(new Date(date), 'HH:mm') : '';
+        } catch {
+            return '';
+        }
+    })();
+
+    return (
+        <div
+            className={\`flex \${isOwn ? 'justify-end' : 'justify-start'} mb-3\`}
+      onMouseEnter={() => setShowActions(true)}
+      onMouseLeave={() => setShowActions(false)}
+    >
+      <div className={\`max-w-[70%] \${isOwn ? 'order-2' : 'order-1'}\`}>
+        <div
+          className={\`rounded-lg p-3 \${
+            isOwn
+              ? 'bg-primary-500 text-white'
+              : 'bg-white text-gray-800 dark:bg-gray-800 dark:text-gray-100 shadow-sm border border-gray-100 dark:border-gray-700'
+          }\`}
+        >
+          <p className="break-words">{message.content}</p>
+          <div className={\`flex items-center justify-end gap-1 mt-1 text-xs \${isOwn ? 'text-primary-100' : 'text-gray-400 dark:text-gray-400'}\`}>
+            <span>{formattedTime}</span>
+            {message.isEdited && <span>(edited)</span>}
+          </div>
+        </div>
+        {isOwn && showActions && (
+          <div className="flex justify-end gap-2 mt-1">
+            <button
+              onClick={() => onEdit(message)}
+              className="p-1 text-gray-400 transition hover:text-primary-500 dark:hover:text-primary-400"
+              title="Edit message"
+            >
+              <FiEdit2 className="w-3.5 h-3.5" />
+            </button>
+            <button
+              onClick={() => onDelete(message._id)}
+              className="p-1 text-gray-400 transition hover:text-red-500 dark:hover:text-red-400"
+              title="Delete message"
+            >
+              <FiTrash2 className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+export default MessageItem;
+`;
+
+    const messageInputContent = `import React, { useState, useRef, useEffect } from 'react';
+import { FiSend } from 'react-icons/fi';
+
+const MessageInput = ({ onSend, onTyping, disabled }) => {
+  const [message, setMessage] = useState('');
+  const textareaRef = useRef(null);
+
+  useEffect(() => {
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+      textareaRef.current.style.height = Math.min(textareaRef.current.scrollHeight, 100) + 'px';
+    }
+  }, [message]);
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (message.trim() && !disabled) {
+      onSend(message.trim());
+      setMessage('');
+    }
+  };
+
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSubmit(e);
+    }
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="flex items-end gap-2 p-4 bg-white border-t border-gray-200 dark:bg-gray-900 dark:border-gray-700">
+      <textarea
+        ref={textareaRef}
+        value={message}
+        onChange={(e) => {
+          setMessage(e.target.value);
+          onTyping?.();
+        }}
+        onKeyDown={handleKeyDown}
+        placeholder="Type a message..."
+        className="flex-1 input-field resize-none min-h-[44px] max-h-[100px]"
+        rows="1"
+        disabled={disabled}
+      />
+      <button
+        type="submit"
+        disabled={!message.trim() || disabled}
+        className="btn-primary flex items-center gap-2 h-[44px] px-6"
+      >
+        <FiSend className="w-4 h-4" />
+        <span className="hidden sm:inline">Send</span>
+      </button>
+    </form>
+  );
+};
+
+export default MessageInput;
+`;
+
+    const editMessageModalContent = `import React, { useState, useEffect } from 'react';
+import { FiX } from 'react-icons/fi';
+
+const EditMessageModal = ({ message, onSave, onClose }) => {
+  const [content, setContent] = useState('');
+
+  useEffect(() => {
+    if (message) {
+      setContent(message.content);
+    }
+  }, [message]);
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (content.trim()) {
+      onSave(message._id, content.trim());
+    }
+  };
+
+  if (!message) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+      <div className="w-full max-w-md p-6 bg-white rounded-lg shadow-xl dark:bg-gray-900 dark:border dark:border-gray-800">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-100">Edit Message</h3>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
+            <FiX className="w-5 h-5" />
+          </button>
+        </div>
+        <form onSubmit={handleSubmit}>
+          <textarea
+            value={content}
+            onChange={(e) => setContent(e.target.value)}
+            className="h-24 resize-none input-field"
+            placeholder="Edit your message..."
+            autoFocus
+          />
+          <div className="flex gap-2 mt-4">
+            <button type="button" onClick={onClose} className="flex-1 btn-secondary">
+              Cancel
+            </button>
+            <button type="submit" className="flex-1 btn-primary">
+              Save Changes
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+};
+
+export default EditMessageModal;
+`;
+
+    const onlineStatusContent = `import React from 'react';
+
+const OnlineStatus = ({ isOnline, lastSeen }) => {
+  return (
+    <div className="flex items-center gap-1.5">
+      <span className={\`w-2.5 h-2.5 rounded-full \${
+        isOnline ? 'bg-green-500' : 'bg-gray-300 dark:bg-gray-600'
+      }\`} />
+      <span className="text-xs text-gray-500 dark:text-gray-400">
+        {isOnline ? 'Online' : lastSeen ? \`Last seen \${new Date(lastSeen).toLocaleTimeString()}\` : 'Offline'}
+      </span>
+    </div>
+  );
+};
+
+export default OnlineStatus;
+`;
+
+    fs.writeFileSync('frontend/src/pages/ChatPage.jsx', chatPageContent, 'utf8');
+    fs.writeFileSync('frontend/src/components/chat/ChatHeader.jsx', chatHeaderContent, 'utf8');
+    fs.writeFileSync('frontend/src/components/chat/MessageItem.jsx', messageItemContent, 'utf8');
+    fs.writeFileSync('frontend/src/components/chat/MessageInput.jsx', messageInputContent, 'utf8');
+    fs.writeFileSync('frontend/src/components/chat/EditMessageModal.jsx', editMessageModalContent, 'utf8');
+    fs.writeFileSync('frontend/src/components/common/OnlineStatus.jsx', onlineStatusContent, 'utf8');
+
+    console.log('All chat components updated successfully.');
