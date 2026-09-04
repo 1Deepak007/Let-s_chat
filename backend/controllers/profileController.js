@@ -1,6 +1,8 @@
 const User = require("../models/User");
 const bcrypt = require("bcryptjs");
 const upload = require("../middleware/upload");
+const fs = require("fs");
+
 
 // get user profile
 exports.getUserProfile = async (req, res) => {
@@ -160,6 +162,72 @@ exports.rejectFriendRequest = async (req, res) => {
     res.json({ message: "Friend request rejected" });
   } catch (err) {
     console.error("Reject request error:", err);
+    res.status(500).json({ message: "Server error", error: err.message });
+  }
+};
+
+exports.updateBackgroundWall = async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ message: "No background image uploaded" });
+    }
+
+    const userId = req.user.id || req.user._id;
+    const user = await User.findById(userId);
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    // Delete old background file if it exists locally
+    if (user.backgroundWall && fs.existsSync(user.backgroundWall)) {
+      fs.unlinkSync(user.backgroundWall);
+    }
+
+    // Update document with new path
+    user.backgroundWall = req.file.path;
+    await user.save();
+
+    const updatedUser = await User.findById(userId).select("-password");
+
+    res.json({
+      message: "Background wall updated successfully",
+      backgroundWall: user.backgroundWall,
+      user: updatedUser
+    });
+  } catch (err) {
+    console.error("Update background wall error:", err);
+    res.status(500).json({ message: "Server error", error: err.message });
+  }
+};
+
+// Delete Background Wall
+exports.deleteBackgroundWall = async (req, res) => {
+  try {
+    const userId = req.user.id || req.user._id;
+    const user = await User.findById(userId);
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    // Delete file from server storage if present
+    if (user.backgroundWall && fs.existsSync(user.backgroundWall)) {
+      fs.unlinkSync(user.backgroundWall);
+    }
+
+    // Reset backgroundWall field in DB
+    user.backgroundWall = "";
+    await user.save();
+
+    const updatedUser = await User.findById(userId).select("-password");
+
+    res.json({
+      message: "Background wall removed successfully",
+      user: updatedUser
+    });
+  } catch (err) {
+    console.error("Delete background wall error:", err);
     res.status(500).json({ message: "Server error", error: err.message });
   }
 };

@@ -1,6 +1,8 @@
 const mongoose = require("mongoose");
 const bcrypt = require("bcryptjs");
 
+
+// below schema is for user, where we store user details
 const userSchema = new mongoose.Schema(
   {
     firstname: {
@@ -25,6 +27,10 @@ const userSchema = new mongoose.Schema(
       type: String,
       default: "",
     },
+    backgroundWall: {
+      type: String,
+      default: "",
+    },
     friends: [
       {
         type: mongoose.Schema.Types.ObjectId,
@@ -36,11 +42,11 @@ const userSchema = new mongoose.Schema(
         userId: {
           type: mongoose.Schema.Types.ObjectId,
           ref: "User",
-          require: true,
+          required: true,
         },
         username: {
           type: String,
-          requires: true,
+          required: true,
         },
       },
     ],

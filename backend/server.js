@@ -22,7 +22,11 @@ dotenv.config();
 const app = express();
 const server = http.createServer(app);
 
-app.use(cors());
+app.use(cors({
+  origin: ["http://localhost:3000", "http://localhost:5173"],
+  credentials: true
+}));
+
 app.use(express.json());
 app.use(cookieParser());
 
@@ -47,12 +51,15 @@ mongoose
 
 const io = socketIo(server, {
   cors: {
-    origin: "http://localhost:5173/",
+    origin: ["http://localhost:3000", "http://localhost:5173"],
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
     credentials: true,
     allowedHeaders: ["Content-Type", "Authorization"],
   },
 });
+
+// Track online users: Map of userId -> Set of socketIds
+const onlineUsersMap = new Map();
 
 io.use((socket, next) => {
   const token = socket.handshake.auth.token;
@@ -61,7 +68,6 @@ io.use((socket, next) => {
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     socket.userId = decoded.id;
-    socket.join(socket.userId);
     next();
   } catch (err) {
     return next(new Error("Authentication error"));
@@ -69,16 +75,84 @@ io.use((socket, next) => {
 });
 
 io.on("connection", (socket) => {
-  // This is the crucial block!
   console.log("A user connected:", socket.id);
 
+  // Automatically join user's room using decoded userId from middleware
+  if (socket.userId) {
+    const userIdStr = socket.userId.toString();
+    socket.join(userIdStr);
+
+    // Add socket to user's active sockets set
+    if (!onlineUsersMap.has(userIdStr)) {
+      onlineUsersMap.set(userIdStr, new Set());
+    }
+    onlineUsersMap.get(userIdStr).add(socket.id);
+
+    // Broadcast updated online users list to everyone
+    io.emit("onlineUsers", Array.from(onlineUsersMap.keys()));
+    console.log(`Socket ${socket.id} joined room ${userIdStr}`);
+  }
+
   socket.on("join", (userId) => {
-    socket.join(userId);
-    console.log(`${socket.id} joined room ${userId}`);
+    socket.join(userId.toString());
+    console.log(`${socket.id} manually joined room ${userId}`);
+  });
+
+  // --- Real-time Message Edit Relay ---
+  socket.on("editMessage", (updatedMessage) => {
+    if (!updatedMessage) return;
+
+    // Extract receiver ID safely (whether it's an object or string)
+    const receiverId = typeof updatedMessage.receiver === "object"
+      ? updatedMessage.receiver?._id
+      : updatedMessage.receiver;
+
+    const senderId = typeof updatedMessage.sender === "object"
+      ? updatedMessage.sender?._id
+      : updatedMessage.sender;
+
+    // Emit 'messageEdited' to both the recipient room and the sender room
+    if (receiverId) {
+      io.to(receiverId.toString()).emit("messageEdited", updatedMessage);
+    }
+    if (senderId) {
+      io.to(senderId.toString()).emit("messageEdited", updatedMessage);
+    }
+  });
+
+  // --- Real-time Message Send Relay (if not handled elsewhere) ---
+  socket.on("sendMessage", (messageData) => {
+    const receiverId = typeof messageData.receiver === "object"
+      ? messageData.receiver?._id
+      : messageData.receiver;
+
+    if (receiverId) {
+      io.to(receiverId.toString()).emit("receiveMessage", messageData);
+    }
+  });
+
+  // --- Real-time Message Delete Relay ---
+  socket.on("deleteMessage", (data) => {
+    const { messageId, receiverId } = data;
+    if (receiverId) {
+      io.to(receiverId.toString()).emit("messageDeleted", { messageId });
+    }
   });
 
   socket.on("disconnect", () => {
     console.log("A user disconnected:", socket.id);
+
+    if (socket.userId) {
+      const userIdStr = socket.userId.toString();
+      if (onlineUsersMap.has(userIdStr)) {
+        onlineUsersMap.get(userIdStr).delete(socket.id);
+        if (onlineUsersMap.get(userIdStr).size === 0) {
+          onlineUsersMap.delete(userIdStr);
+        }
+      }
+      // Broadcast updated online users list
+      io.emit("onlineUsers", Array.from(onlineUsersMap.keys()));
+    }
   });
 });
 

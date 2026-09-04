@@ -7,113 +7,8 @@
   },
   "item": [
     {
-      "name": "user's apis",
+      "name": "Auth",
       "item": [
-        {
-          "name": "Get user by username",
-          "protocolProfileBehavior": {
-            "disableBodyPruning": true
-          },
-          "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY3YWY2YWVkMzMwMzhiNzcyZDhiMjdjMiIsImlhdCI6MTczOTU1MjI4NiwiZXhwIjoxNzM5NTczODg2fQ.RdaiUI0MOa2--KWa5DVwSijFJ7Qiyeg8nt8_8BpwJvo",
-                  "type": "string"
-                }
-              ]
-            },
-            "method": "GET",
-            "header": [],
-            "body": {
-              "mode": "raw",
-              "raw": "{\r\n    \"username\":\"sonugautam\"\r\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "url": {
-              "raw": "http://localhost:5000/api/friends/find-friend-by-username-or-id/67ae03955a68812e06d08c80",
-              "protocol": "http",
-              "host": [
-                "localhost"
-              ],
-              "port": "5000",
-              "path": [
-                "api",
-                "friends",
-                "find-friend-by-username-or-id",
-                "67ae03955a68812e06d08c80"
-              ]
-            }
-          },
-          "response": []
-        },
-        {
-          "name": "Get all users",
-          "protocolProfileBehavior": {
-            "disableBodyPruning": true
-          },
-          "request": {
-            "method": "GET",
-            "header": [],
-            "body": {
-              "mode": "raw",
-              "raw": "",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "url": {
-              "raw": "http://localhost:5000/getallusers",
-              "protocol": "http",
-              "host": [
-                "localhost"
-              ],
-              "port": "5000",
-              "path": [
-                "getallusers"
-              ]
-            }
-          },
-          "response": []
-        },
-        {
-          "name": "Register",
-          "request": {
-            "method": "POST",
-            "header": [],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n    \"firstname\":\"Deepak\",\n  \"username\": \"deepakgautam\",\n  \"password\": \"root@123\"\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "url": {
-              "raw": "http://localhost:5000/api/auth/signup",
-              "protocol": "http",
-              "host": [
-                "localhost"
-              ],
-              "port": "5000",
-              "path": [
-                "api",
-                "auth",
-                "signup"
-              ]
-            }
-          },
-          "response": []
-        },
         {
           "name": "Login",
           "event": [
@@ -212,6 +107,501 @@
           },
           "response": []
         },
+        {
+          "name": "Signup",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"firstname\":\"Deepak\",\n  \"username\": \"deepakgautam\",\n  \"password\": \"root@123\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "http://localhost:5000/api/auth/signup",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "5000",
+              "path": [
+                "api",
+                "auth",
+                "signup"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Chat",
+      "item": [
+        {
+          "name": "Edit Message",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY3YjQ1ZDQzM2RkNDE5YWExMTBiMTE0ZiIsImlhdCI6MTczOTk4NzgzOCwiZXhwIjoxNzQwMDA5NDM4fQ.uMsIx64NBIrzPkO9y6DSscKuL3FnmgJLkMLPY7MPAgs",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "PUT",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n    \"messageId\":\"67b61717a9c79c343af52d4f\",\r\n    \"newContent\":\"Hi! Deepak here.\",\r\n    \"userId\":\"67b45d643dd419aa110b1158\"\r\n}\r\n",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "http://localhost:5000/api/chat/editmessage",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "5000",
+              "path": [
+                "api",
+                "chat",
+                "editmessage"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get msgs b/t two users",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY3YjQ1ZDY0M2RkNDE5YWExMTBiMTE1OCIsImlhdCI6MTczOTk2MzAzNywiZXhwIjoxNzM5OTg0NjM3fQ.eLSjfF4VNfaUX36Qm9ynLSXWc0G_-8GuSwsiDOR8OiA",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"senderId\": \"67b45d433dd419aa110b114f\",\n    \"receiverId\": \"67b45d643dd419aa110b1158\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "http://localhost:5000/api/chat/messages",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "5000",
+              "path": [
+                "api",
+                "chat",
+                "messages"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Deletemessage My MsgId",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY3YjQ1ZDQzM2RkNDE5YWExMTBiMTE0ZiIsImlhdCI6MTczOTk4NzgzOCwiZXhwIjoxNzQwMDA5NDM4fQ.uMsIx64NBIrzPkO9y6DSscKuL3FnmgJLkMLPY7MPAgs",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "DELETE",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n    \"messageId\":\"67b5f7d85ce366aa167df46c\",\r\n    \"senderId\":\"67b45d433dd419aa110b114f\"\r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "http://localhost:5000/api/chat/deletemessage",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "5000",
+              "path": [
+                "api",
+                "chat",
+                "deletemessage"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Send Message",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY3YjQ1ZDY0M2RkNDE5YWExMTBiMTE1OCIsImlhdCI6MTczOTk4NjYxMiwiZXhwIjoxNzQwMDA4MjEyfQ.EeUVAZ8hG3q-08P60-85Jti6PMaOkNjdO8wcLjfM2qI",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"sender\": \"67b45d643dd419aa110b1158\",\n    \"receiver\": \"67b45d433dd419aa110b114f\",\n    \"content\": \"Hi! Deepak this side.\",\n    \"messageType\": \"text\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "http://localhost:5000/api/chat/sendmessage",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "5000",
+              "path": [
+                "api",
+                "chat",
+                "sendmessage"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Conversation",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n  \"friendId\": \"65f1a2b3c4d5e6f7a8b9c0d1\"\r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "http://localhost:5000/api/chat/delete-conversation",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "5000",
+              "path": [
+                "api",
+                "chat",
+                "delete-conversation"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Friends",
+      "item": [
+        {
+          "name": "Get user by username",
+          "protocolProfileBehavior": {
+            "disableBodyPruning": true
+          },
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY3YWY2YWVkMzMwMzhiNzcyZDhiMjdjMiIsImlhdCI6MTczOTU1MjI4NiwiZXhwIjoxNzM5NTczODg2fQ.RdaiUI0MOa2--KWa5DVwSijFJ7Qiyeg8nt8_8BpwJvo",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n    \"username\":\"sonugautam\"\r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "http://localhost:5000/api/friends/find-friend-by-username-or-id/67ae03955a68812e06d08c80",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "5000",
+              "path": [
+                "api",
+                "friends",
+                "find-friend-by-username-or-id",
+                "67ae03955a68812e06d08c80"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Friend List",
+          "protocolProfileBehavior": {
+            "disableBodyPruning": true
+          },
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY3YjQ1ZDQzM2RkNDE5YWExMTBiMTE0ZiIsImlhdCI6MTczOTk2MDYyMiwiZXhwIjoxNzM5OTgyMjIyfQ.A-t0S8HH0i7LrmTrz85ZcZqJgYyA81c-E27bpwl3XYE",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "http://localhost:5000/api/friends/get-friends/67b45d433dd419aa110b114f",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "5000",
+              "path": [
+                "api",
+                "friends",
+                "get-friends",
+                "67b45d433dd419aa110b114f"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Reject Friend Request",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY3YjA3YzMxODhmYWNmYTA5N2NhNjFiMSIsImlhdCI6MTczOTc4MTQxMSwiZXhwIjoxNzM5ODAzMDExfQ.k7VouWB9VfsrYviKj6OJvF-pfF578_sofspa0yDsnYo",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "DELETE",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "http://localhost:5000/api/friends/reject-request/67b2f4c7e9844722c75b70b3",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "5000",
+              "path": [
+                "api",
+                "friends",
+                "reject-request",
+                "67b2f4c7e9844722c75b70b3"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Send Friend Request",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY3YjQ1ZDQzM2RkNDE5YWExMTBiMTE0ZiIsImlhdCI6MTczOTk2MDg0OSwiZXhwIjoxNzM5OTgyNDQ5fQ.gb55I-smJ-Uam6qPyiJojFoI2XRCXr929HpkvE0RxZE",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:5000/api/friends/send-request/67b45d643dd419aa110b1158",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "5000",
+              "path": [
+                "api",
+                "friends",
+                "send-request",
+                "67b45d643dd419aa110b1158"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Accept friend requests",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY3YjQ1ZDY0M2RkNDE5YWExMTBiMTE1OCIsImlhdCI6MTczOTk2MTExNywiZXhwIjoxNzM5OTgyNzE3fQ.JydoNf5h39dX8ybNRMpNinlYKZOKfZL0tbw9T3QxCC4",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "http://localhost:5000/api/friends/accept-request/67b45d433dd419aa110b114f",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "5000",
+              "path": [
+                "api",
+                "friends",
+                "accept-request",
+                "67b45d433dd419aa110b114f"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Friend Requests",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": ""
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Friend Suggestions",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": ""
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Unfriend",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY3YjQ1ZDY0M2RkNDE5YWExMTBiMTE1OCIsImlhdCI6MTczOTg5NTE1NywiZXhwIjoxNzM5OTE2NzU3fQ.vWLyzZIkjYrcvpm6N3Lb7cZLnp_0I3mz0ZiEfJTFcQ0",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "DELETE",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": []
+            },
+            "url": {
+              "raw": "http://localhost:5000/api/friends/unfriend/67b45d433dd419aa110b114f",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "5000",
+              "path": [
+                "api",
+                "friends",
+                "unfriend",
+                "67b45d433dd419aa110b114f"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Profile",
+      "item": [
         {
           "name": "Get user profile by user's _id",
           "protocolProfileBehavior": {
@@ -340,6 +730,126 @@
             }
           },
           "response": []
+        },
+        {
+          "name": "Update Profile Picture",
+          "request": {
+            "method": "PUT",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:5000/api/profile/update-profile-picture",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "5000",
+              "path": [
+                "api",
+                "profile",
+                "update-profile-picture"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Unfriend",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:5000/api/profile/unfriend/:friendId",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "5000",
+              "path": [
+                "api",
+                "profile",
+                "unfriend",
+                ":friendId"
+              ],
+              "variable": [
+                {
+                  "key": "friendId",
+                  "value": ""
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Reject Friend Request",
+          "request": {
+            "method": "PUT",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:5000/api/profile/reject-request/:requestId",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "5000",
+              "path": [
+                "api",
+                "profile",
+                "reject-request",
+                ":requestId"
+              ],
+              "variable": [
+                {
+                  "key": "requestId",
+                  "value": ""
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update background wallpaper",
+          "request": {
+            "method": "PUT",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:5000/api/profile//update-background-wall",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "5000",
+              "path": [
+                "api",
+                "profile",
+                "",
+                "update-background-wall"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete background",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:5000/api/profile/delete-background-wall",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "5000",
+              "path": [
+                "api",
+                "profile",
+                "delete-background-wall"
+              ]
+            }
+          },
+          "response": []
         }
       ]
     },
@@ -360,181 +870,11 @@
       "response": []
     },
     {
-      "name": "Get msgs b/t two users",
-      "request": {
-        "auth": {
-          "type": "bearer",
-          "bearer": [
-            {
-              "key": "token",
-              "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY3YjQ1ZDY0M2RkNDE5YWExMTBiMTE1OCIsImlhdCI6MTczOTk2MzAzNywiZXhwIjoxNzM5OTg0NjM3fQ.eLSjfF4VNfaUX36Qm9ynLSXWc0G_-8GuSwsiDOR8OiA",
-              "type": "string"
-            }
-          ]
-        },
-        "method": "POST",
-        "header": [],
-        "body": {
-          "mode": "raw",
-          "raw": "{\n    \"senderId\": \"67b45d433dd419aa110b114f\",\n    \"receiverId\": \"67b45d643dd419aa110b1158\"\n}",
-          "options": {
-            "raw": {
-              "language": "json"
-            }
-          }
-        },
-        "url": {
-          "raw": "http://localhost:5000/api/chat/messages",
-          "protocol": "http",
-          "host": [
-            "localhost"
-          ],
-          "port": "5000",
-          "path": [
-            "api",
-            "chat",
-            "messages"
-          ]
-        }
-      },
-      "response": []
-    },
-    {
-      "name": "Send Message",
-      "request": {
-        "auth": {
-          "type": "bearer",
-          "bearer": [
-            {
-              "key": "token",
-              "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY3YjQ1ZDY0M2RkNDE5YWExMTBiMTE1OCIsImlhdCI6MTczOTk4NjYxMiwiZXhwIjoxNzQwMDA4MjEyfQ.EeUVAZ8hG3q-08P60-85Jti6PMaOkNjdO8wcLjfM2qI",
-              "type": "string"
-            }
-          ]
-        },
-        "method": "POST",
-        "header": [],
-        "body": {
-          "mode": "raw",
-          "raw": "{\n    \"sender\": \"67b45d643dd419aa110b1158\",\n    \"receiver\": \"67b45d433dd419aa110b114f\",\n    \"content\": \"Hi! Deepak this side.\",\n    \"messageType\": \"text\"\n}",
-          "options": {
-            "raw": {
-              "language": "json"
-            }
-          }
-        },
-        "url": {
-          "raw": "http://localhost:5000/api/chat/sendmessage",
-          "protocol": "http",
-          "host": [
-            "localhost"
-          ],
-          "port": "5000",
-          "path": [
-            "api",
-            "chat",
-            "sendmessage"
-          ]
-        }
-      },
-      "response": []
-    },
-    {
-      "name": "Edit Message",
-      "request": {
-        "auth": {
-          "type": "bearer",
-          "bearer": [
-            {
-              "key": "token",
-              "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY3YjQ1ZDQzM2RkNDE5YWExMTBiMTE0ZiIsImlhdCI6MTczOTk4NzgzOCwiZXhwIjoxNzQwMDA5NDM4fQ.uMsIx64NBIrzPkO9y6DSscKuL3FnmgJLkMLPY7MPAgs",
-              "type": "string"
-            }
-          ]
-        },
-        "method": "PUT",
-        "header": [],
-        "body": {
-          "mode": "raw",
-          "raw": "{\r\n    \"messageId\":\"67b61717a9c79c343af52d4f\",\r\n    \"newContent\":\"Hi! Deepak here.\",\r\n    \"userId\":\"67b45d643dd419aa110b1158\"\r\n}\r\n",
-          "options": {
-            "raw": {
-              "language": "json"
-            }
-          }
-        },
-        "url": {
-          "raw": "http://localhost:5000/api/chat/editmessage",
-          "protocol": "http",
-          "host": [
-            "localhost"
-          ],
-          "port": "5000",
-          "path": [
-            "api",
-            "chat",
-            "editmessage"
-          ]
-        }
-      },
-      "response": []
-    },
-    {
-      "name": "Deletemessage My MsgId",
-      "request": {
-        "auth": {
-          "type": "bearer",
-          "bearer": [
-            {
-              "key": "token",
-              "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY3YjQ1ZDQzM2RkNDE5YWExMTBiMTE0ZiIsImlhdCI6MTczOTk4NzgzOCwiZXhwIjoxNzQwMDA5NDM4fQ.uMsIx64NBIrzPkO9y6DSscKuL3FnmgJLkMLPY7MPAgs",
-              "type": "string"
-            }
-          ]
-        },
-        "method": "DELETE",
-        "header": [],
-        "body": {
-          "mode": "raw",
-          "raw": "{\r\n    \"messageId\":\"67b5f7d85ce366aa167df46c\",\r\n    \"senderId\":\"67b45d433dd419aa110b114f\"\r\n}",
-          "options": {
-            "raw": {
-              "language": "json"
-            }
-          }
-        },
-        "url": {
-          "raw": "http://localhost:5000/api/chat/deletemessage",
-          "protocol": "http",
-          "host": [
-            "localhost"
-          ],
-          "port": "5000",
-          "path": [
-            "api",
-            "chat",
-            "deletemessage"
-          ]
-        }
-      },
-      "response": []
-    },
-    {
-      "name": "Get Friend List",
+      "name": "Get all users",
       "protocolProfileBehavior": {
         "disableBodyPruning": true
       },
       "request": {
-        "auth": {
-          "type": "bearer",
-          "bearer": [
-            {
-              "key": "token",
-              "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY3YjQ1ZDQzM2RkNDE5YWExMTBiMTE0ZiIsImlhdCI6MTczOTk2MDYyMiwiZXhwIjoxNzM5OTgyMjIyfQ.A-t0S8HH0i7LrmTrz85ZcZqJgYyA81c-E27bpwl3XYE",
-              "type": "string"
-            }
-          ]
-        },
         "method": "GET",
         "header": [],
         "body": {
@@ -547,167 +887,14 @@
           }
         },
         "url": {
-          "raw": "http://localhost:5000/api/friends/get-friends/67b45d433dd419aa110b114f",
+          "raw": "http://localhost:5000/getallusers",
           "protocol": "http",
           "host": [
             "localhost"
           ],
           "port": "5000",
           "path": [
-            "api",
-            "friends",
-            "get-friends",
-            "67b45d433dd419aa110b114f"
-          ]
-        }
-      },
-      "response": []
-    },
-    {
-      "name": "Send Friend Request",
-      "request": {
-        "auth": {
-          "type": "bearer",
-          "bearer": [
-            {
-              "key": "token",
-              "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY3YjQ1ZDQzM2RkNDE5YWExMTBiMTE0ZiIsImlhdCI6MTczOTk2MDg0OSwiZXhwIjoxNzM5OTgyNDQ5fQ.gb55I-smJ-Uam6qPyiJojFoI2XRCXr929HpkvE0RxZE",
-              "type": "string"
-            }
-          ]
-        },
-        "method": "POST",
-        "header": [],
-        "url": {
-          "raw": "http://localhost:5000/api/friends/send-request/67b45d643dd419aa110b1158",
-          "protocol": "http",
-          "host": [
-            "localhost"
-          ],
-          "port": "5000",
-          "path": [
-            "api",
-            "friends",
-            "send-request",
-            "67b45d643dd419aa110b1158"
-          ]
-        }
-      },
-      "response": []
-    },
-    {
-      "name": "Accept friend requests",
-      "request": {
-        "auth": {
-          "type": "bearer",
-          "bearer": [
-            {
-              "key": "token",
-              "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY3YjQ1ZDY0M2RkNDE5YWExMTBiMTE1OCIsImlhdCI6MTczOTk2MTExNywiZXhwIjoxNzM5OTgyNzE3fQ.JydoNf5h39dX8ybNRMpNinlYKZOKfZL0tbw9T3QxCC4",
-              "type": "string"
-            }
-          ]
-        },
-        "method": "POST",
-        "header": [],
-        "body": {
-          "mode": "raw",
-          "raw": "",
-          "options": {
-            "raw": {
-              "language": "json"
-            }
-          }
-        },
-        "url": {
-          "raw": "http://localhost:5000/api/friends/accept-request/67b45d433dd419aa110b114f",
-          "protocol": "http",
-          "host": [
-            "localhost"
-          ],
-          "port": "5000",
-          "path": [
-            "api",
-            "friends",
-            "accept-request",
-            "67b45d433dd419aa110b114f"
-          ]
-        }
-      },
-      "response": []
-    },
-    {
-      "name": "Reject Friend Request",
-      "request": {
-        "auth": {
-          "type": "bearer",
-          "bearer": [
-            {
-              "key": "token",
-              "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY3YjA3YzMxODhmYWNmYTA5N2NhNjFiMSIsImlhdCI6MTczOTc4MTQxMSwiZXhwIjoxNzM5ODAzMDExfQ.k7VouWB9VfsrYviKj6OJvF-pfF578_sofspa0yDsnYo",
-              "type": "string"
-            }
-          ]
-        },
-        "method": "DELETE",
-        "header": [],
-        "body": {
-          "mode": "raw",
-          "raw": "",
-          "options": {
-            "raw": {
-              "language": "json"
-            }
-          }
-        },
-        "url": {
-          "raw": "http://localhost:5000/api/friends/reject-request/67b2f4c7e9844722c75b70b3",
-          "protocol": "http",
-          "host": [
-            "localhost"
-          ],
-          "port": "5000",
-          "path": [
-            "api",
-            "friends",
-            "reject-request",
-            "67b2f4c7e9844722c75b70b3"
-          ]
-        }
-      },
-      "response": []
-    },
-    {
-      "name": "Unfriend",
-      "request": {
-        "auth": {
-          "type": "bearer",
-          "bearer": [
-            {
-              "key": "token",
-              "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY3YjQ1ZDY0M2RkNDE5YWExMTBiMTE1OCIsImlhdCI6MTczOTg5NTE1NywiZXhwIjoxNzM5OTE2NzU3fQ.vWLyzZIkjYrcvpm6N3Lb7cZLnp_0I3mz0ZiEfJTFcQ0",
-              "type": "string"
-            }
-          ]
-        },
-        "method": "DELETE",
-        "header": [],
-        "body": {
-          "mode": "formdata",
-          "formdata": []
-        },
-        "url": {
-          "raw": "http://localhost:5000/api/friends/unfriend/67b45d433dd419aa110b114f",
-          "protocol": "http",
-          "host": [
-            "localhost"
-          ],
-          "port": "5000",
-          "path": [
-            "api",
-            "friends",
-            "unfriend",
-            "67b45d433dd419aa110b114f"
+            "getallusers"
           ]
         }
       },

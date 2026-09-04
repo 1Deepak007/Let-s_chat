@@ -46,19 +46,26 @@ const messageSchema = new mongoose.Schema({
     type: Date,
     default: null,
   },
+  reactions: [{
+    userId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      required: true,
+    },
+    emoji: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+  }],
+  replyTo: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Message',
+    default: null,
+  },
 }, { timestamps: true });  // Automatically adds createdAt & updatedAt fields
 
 // Index sender and receiver for faster querying
 messageSchema.index({ sender: 1, receiver: 1, timestamp: -1 });
 
 module.exports = mongoose.model('Message', messageSchema);
-
-
-// const mongoose = require('mongoose');
-
-// const messageSchema = new mongoose.Schema({
-//   sender: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-//   receiver: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-//   content: { type: String, required: true },
-//   timestamp: { type: Date, default: Date.now }  // ✅ Ensure timestamp is set
-// });

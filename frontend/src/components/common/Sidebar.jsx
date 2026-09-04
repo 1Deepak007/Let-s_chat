@@ -18,14 +18,16 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
 
   return (
     <aside
-      className={`fixed top-16 bottom-0 left-0 z-30 flex flex-col justify-between bg-white border-r border-gray-200 dark:bg-gray-900 dark:border-gray-700 transition-all duration-300 ease-in-out ${
-        isOpen ? 'w-64' : 'w-20'
+      className={`fixed top-12 md:top-16 bottom-0 left-0 z-40 flex flex-col justify-between bg-white border-r border-gray-200 dark:bg-gray-900 dark:border-gray-800 transition-all duration-300 ease-in-out ${
+        /* Mobile: off-screen drawer | Desktop: collapsed or expanded width */
+        isOpen 
+          ? 'w-48 md:w-64 translate-x-0' 
+          : '-translate-x-full md:translate-x-0 md:w-20'
       }`}
     >
-      {/* Upper Section: Toggle Header + Nav Items */}
-      <div className="flex-1 px-3 py-4 space-y-4">
-        {/* Internal Toggle Button */}
-        <div className={`flex items-center ${isOpen ? 'justify-end px-1' : 'justify-center'}`}>
+      <div className="flex-1 px-3 py-4 space-y-4 overflow-y-auto">
+        {/* Desktop Expand/Collapse Chevron Button */}
+        <div className="items-center justify-end hidden px-1 md:flex">
           <button
             onClick={toggleSidebar}
             className="p-2 text-gray-500 transition-colors bg-gray-100 rounded-lg hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 dark:bg-gray-800 focus:outline-none"
@@ -42,23 +44,28 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
             <NavLink
               key={item.path}
               to={item.path}
+              onClick={() => {
+                if (window.innerWidth < 768) toggleSidebar();
+              }}
               title={!isOpen ? item.label : undefined}
               className={({ isActive }) =>
-                `flex items-center gap-4 px-3 py-3 rounded-lg transition-colors duration-150 ${
-                  isOpen ? 'justify-start' : 'justify-center'
+                `flex items-center gap-4 px-1 py-2 md:px-2 md:p-3 rounded-lg transition-colors duration-150 ${
+                  isOpen ? 'justify-start' : 'md:justify-center justify-start'
                 } ${
                   isActive
-                    ? 'bg-primary-50 dark:bg-primary-900/30 text-primary-600 dark:text-primary-400 font-semibold'
+                    ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 font-semibold'
                     : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
                 }`
               }
             >
               <item.icon className="w-6 h-6 shrink-0" />
-              {isOpen && (
-                <span className="transition-opacity duration-200 whitespace-nowrap">
-                  {item.label}
-                </span>
-              )}
+              <span
+                className={`transition-opacity duration-200 whitespace-nowrap ${
+                  isOpen ? 'block' : 'block md:hidden'
+                }`}
+              >
+                {item.label}
+              </span>
             </NavLink>
           ))}
         </nav>

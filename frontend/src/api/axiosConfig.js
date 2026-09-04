@@ -1,8 +1,10 @@
 import axios from 'axios';
 import { toast } from 'react-toastify';
+// import { config as appConfig } from './config';
+import {config as appConfig} from '../config';
 
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL || '',
+  baseURL: appConfig.API_URL, // Points to http://localhost:5000
   withCredentials: true,
 });
 
@@ -22,11 +24,17 @@ api.interceptors.request.use(
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response && (error.response.status === 401 || error.response.status === 403)) {
-      const isAuthRoute = error.config.url.includes('/api/auth/login') || error.config.url.includes('/api/auth/signup');
+    if (error.response?.status === 401) {
+      const requestUrl = error.config?.url || '';
+      const isAuthRoute = requestUrl.includes('/api/auth/login') ||
+        requestUrl.includes('/api/auth/signup') ||
+        requestUrl.includes('/api/auth/logout');
 
       // Only redirect if the request wasn't a login/signup attempt itself
       if (!isAuthRoute) {
+        // Log the exact failing endpoint to your console for debugging
+        console.error(`[Auth Error] ${error.response.status} on route: ${requestUrl}`);
+
         localStorage.removeItem('token');
         localStorage.removeItem('user');
 

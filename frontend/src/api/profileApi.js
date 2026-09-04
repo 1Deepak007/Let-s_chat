@@ -13,3 +13,11 @@ export const updateProfilePicture = (formData) =>
 
 export const changePassword = (data) => 
   api.put('/api/profile/change-password', data);
+
+export const updateBackgroundWall = (formData) => 
+  api.put('/api/profile/update-background-wall', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' }
+  });
+
+export const deleteBackgroundWall = () => 
+  api.delete('/api/profile/delete-background-wall');

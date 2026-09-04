@@ -9,7 +9,7 @@ const HomePage = () => {
   return (
     <MainLayout>
       <div className={({ isActive }) => `${isActive ? 'card text-2xl font-bold text-gray-600' : 'card text-2xl font-bold text-green-50'}`}>
-        <div className="card">
+        <div className="p-3 rounded-lg shadow-md md:p-6 md:mt-0 md:card card  md:mr-[15%] md:ml-[15%]">
           <h1 className=''>Welcome, {user?.firstname}! 👋</h1>
           <p> Start chatting with your friends or find new people to connect with. </p>
           <div className="grid grid-cols-1 gap-4 mt-6 md:grid-cols-2">

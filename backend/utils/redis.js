@@ -10,7 +10,7 @@ redisClient.on('error', (err) => {
 });
 
 redisClient.on('connect', () => {
-    console.log('Connected to Redis');
+    console.log('Connected to Redis :',process.env.REDIS_HOST,':',process.env.REDIS_PORT);
 });
 
 module.exports = redisClient;

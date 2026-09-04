@@ -4,19 +4,21 @@ const bcrypt = require('bcrypt')
 const redisClient = require('../utils/redis');
 
 exports.register = async (req, res) => {
-    const { firstname, lastname, username, password } = req.body; // Include lastName
+    const { firstname, lastname, username, password } = req.body;
     try {
         let user = await User.findOne({ username });
         if (user) return res.status(400).json({ message: 'Username already exists.' });
 
-        const newUser = new User({  // Create a new User instance
+        // Create a new User instance
+        const newUser = new User({
             firstname,              
             lastname,              
             username,
             password
         });
 
-        await newUser.save();     // This is CRUCIAL!  It triggers the pre('save') middleware and hashes the password
+        // Imp. : triggers tpre('save') middleware and hashes the password
+        await newUser.save();
         res.status(201).json({ message: 'User created.', user: newUser }); // Send back the newly created user (excluding password)
 
     } catch (err) {
@@ -36,7 +38,7 @@ exports.login = async (req, res) => {
 
         const data = { id: user._id };
 
-        const token = jwt.sign(data, process.env.JWT_SECRET, { expiresIn: '4h' });
+        const token = jwt.sign(data, process.env.JWT_SECRET, { expiresIn: '1d' });
 
         const notifications = user.notifications;
         user.notifications = []; // Clear notifications after showing once
@@ -59,23 +61,33 @@ exports.login = async (req, res) => {
     }
 }
 
-// Logout API using Redis to store invalid tokens
+// Logout API clears the client cookie and invalidates the token when Redis is available.
 exports.logout = async (req, res) => {
-    try {
-        const token = req.headers.authorization?.split(' ')[1]; // Extract token from Authorization header
-        if (!token) return res.status(401).json({ message: 'No token found' });
+    const token = req.headers.authorization?.split(' ')[1];
+    const cookieOptions = {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'strict'
+    };
 
-        // Verify the token
-        const decoded = jwt.verify(token, process.env.JWT_SECRET);
-        // Check if Redis is connected
-        if (redisClient.status !== 'ready') {
-            return res.status(500).json({ message: 'Redis connection not ready' });
+    res.clearCookie('token', cookieOptions);
+
+    if (token) {
+        try {
+            const decoded = jwt.verify(token, process.env.JWT_SECRET);
+            const ttl = Math.max(1, decoded.exp - Math.floor(Date.now() / 1000));
+
+            if (redisClient.status === 'ready') {
+                await redisClient.setex(`blacklist:${token}`, ttl, 'logged out');
+            } else {
+                console.error('Logout blacklist skipped: Redis connection not ready');
+            }
+        } catch (err) {
+            if (err.name !== 'TokenExpiredError' && err.name !== 'JsonWebTokenError') {
+                console.error('Logout blacklist error:', err);
+            }
         }
-        // Store token in Redis with the same expiration time (6 hours)
-        await redisClient.setex(`blacklist:${token}`, 6 * 3600, 'logged out');
-        res.status(200).json({ message: 'User logged out successfully' });
-    } catch (err) {
-        // console.error('Logout error:', err);
-        res.status(500).json({ message: `Server error: ${err.message}` });
     }
+
+    res.status(200).json({ message: 'User logged out successfully' });
 };

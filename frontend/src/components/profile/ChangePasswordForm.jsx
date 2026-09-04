@@ -2,8 +2,12 @@ import React, { useState } from 'react';
 import { Formik, Form, Field, ErrorMessage } from 'formik';
 import { changePasswordValidation } from '../../utils/validations';
 import { FiEye, FiEyeOff } from 'react-icons/fi';
+import { useTheme } from '../../contexts/ThemeContext';
 
 const ChangePasswordForm = ({ onSubmit, loading }) => {
+
+  const {toggleDarkMode, darkMode} = useTheme();
+
   const [showPasswords, setShowPasswords] = useState({
     old: false,
     new: false,
@@ -24,21 +28,21 @@ const ChangePasswordForm = ({ onSubmit, loading }) => {
       onSubmit={onSubmit}
     >
       {() => (
-        <Form className="space-y-4">
+        <Form className={`md:px-[15%] px-3 pb-3 space-y-4 ${darkMode ? 'text-gray-100' : 'text-black'}`}>
           <div>
-            <label className="block mb-1 text-sm font-medium text-gray-700">
+            <label className="block mb-1 text-xs md:text-md">
               Current Password
             </label>
             <div className="relative">
               <Field
                 name="oldPassword"
                 type={showPasswords.old ? 'text' : 'password'}
-                className="pr-10 input-field"
+                className="pr-10 text-xs input-field md:text-md"
                 placeholder="Enter current password"
               />
               <button
                 type="button"
-                className="absolute text-gray-500 -translate-y-1/2 right-3 top-1/2"
+                className="absolute -translate-y-1/2 right-3 top-1/2"
                 onClick={() => togglePassword('old')}
               >
                 {showPasswords.old ? <FiEyeOff /> : <FiEye />}
@@ -52,19 +56,19 @@ const ChangePasswordForm = ({ onSubmit, loading }) => {
           </div>
 
           <div>
-            <label className="block mb-1 text-sm font-medium text-gray-700">
+            <label className="block mb-1 text-xs md:text-md">
               New Password
             </label>
             <div className="relative">
               <Field
                 name="newPassword"
                 type={showPasswords.new ? 'text' : 'password'}
-                className="pr-10 input-field"
+                className="pr-10 text-xs input-field md:text-md"
                 placeholder="Enter new password"
               />
               <button
                 type="button"
-                className="absolute text-gray-500 -translate-y-1/2 right-3 top-1/2"
+                className="absolute -translate-y-1/2 right-3 top-1/2"
                 onClick={() => togglePassword('new')}
               >
                 {showPasswords.new ? <FiEyeOff /> : <FiEye />}
@@ -78,14 +82,14 @@ const ChangePasswordForm = ({ onSubmit, loading }) => {
           </div>
 
           <div>
-            <label className="block mb-1 text-sm font-medium text-gray-700">
+            <label className="block mb-1 text-xs md:text-md">
               Confirm Password
             </label>
             <div className="relative">
               <Field
                 name="confirmPassword"
                 type={showPasswords.confirm ? 'text' : 'password'}
-                className="pr-10 input-field"
+                className="pr-10 text-xs input-field md:text-md"
                 placeholder="Confirm new password"
               />
               <button
@@ -106,7 +110,7 @@ const ChangePasswordForm = ({ onSubmit, loading }) => {
           <button
             type="submit"
             disabled={loading}
-            className="w-full btn-primary"
+            className="w-full text-sm btn-primary md:text-base"
           >
             {loading ? 'Changing...' : 'Change Password'}
           </button>

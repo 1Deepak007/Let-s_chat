@@ -12,8 +12,9 @@ const EditMessageModal = ({ message, onSave, onClose }) => {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (content.trim()) {
-      onSave(message._id, content.trim());
+    const idToUse = message._id || message.id;
+    if (content.trim() && idToUse) {
+      onSave(idToUse, content.trim());
     }
   };
 

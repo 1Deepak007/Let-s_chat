@@ -17,7 +17,7 @@ const FriendRequestCard = ({ request, onAccept, onReject }) => {
   const profilePicture = sender.profilePicture || request.profilePicture;
 
   return (
-    <div className="flex items-center justify-between p-3 bg-white rounded-lg shadow-sm">
+    <div className="flex items-center justify-between p-3 transition bg-white rounded-lg shadow-md md:hover:shadow-xl md:hover:bg-gradient-to-r md:hover:-hue-rotate-60 md:w-1/3">
       <div className="flex items-center gap-3">
         <img
           src={profilePicture || `https://ui-avatars.com/api/?name=${firstname}&background=10b981&color=fff`}

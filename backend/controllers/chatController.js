@@ -33,10 +33,13 @@ module.exports = (io) => {
           .json({ message: "Sender or receiver user not found" });
       }
 
-      // Check if sender and receiver are friends
+      // Safe string-based friendship check (handles both String & ObjectId entries)
+      const senderIdStr = senderObjId.toString();
+      const receiverIdStr = receiverObjId.toString();
+
       const areFriends =
-        senderUser.friends.some((friendId) => friendId.equals(receiverObjId)) &&
-        receiverUser.friends.some((friendId) => friendId.equals(senderObjId));
+        senderUser.friends.some((f) => f.toString() === receiverIdStr) ||
+        receiverUser.friends.some((f) => f.toString() === senderIdStr);
 
       if (!areFriends) {
         return res
@@ -55,6 +58,10 @@ module.exports = (io) => {
         .sort({ timestamp: 1 }) // Sort by timestamp (ascending order)
         .populate("sender", "username firstname lastname profilePicture _id")
         .populate("receiver", "username firstname lastname profilePicture _id")
+        .populate({
+          path: "replyTo",
+          populate: { path: "sender", select: "username firstname lastname profilePicture _id" },
+        })
         .lean();
 
       // Return all messages sorted by timestamp
@@ -67,112 +74,178 @@ module.exports = (io) => {
 
   // Send message and emit real-time event
   const sendMessage = async (req, res) => {
-    const { sender, receiver, content, messageType } = req.body;
-
-    // console.log('sender : ',sender);
-    // console.log('receiver : ',receiver);
-    // console.log('content : ',content);
-    // console.log('messageType : ',messageType);
-
     try {
-      const senderId = new mongoose.Types.ObjectId(sender);
-      const receiverId = new mongoose.Types.ObjectId(receiver);
+      const { receiver, content, messageType, replyTo } = req.body;
+      const sender = req.user.id || req.user._id;
 
-      // *** THIS IS THE CORRECT WAY TO GET THE USERS ***
-      const [senderUser, receiverUser] = await Promise.all([
-        User.findById(senderId),
-        User.findById(receiverId),
-      ]);
+      let fileUrl = "";
+      let finalMessageType = messageType || "text";
 
-      if (!senderUser || !receiverUser) {
-        return res
-          .status(404)
-          .json({ message: "Sender or receiver user not found" });
+      if (replyTo && !mongoose.Types.ObjectId.isValid(replyTo)) {
+        return res.status(400).json({ message: "Invalid reply message ID." });
       }
 
-      const areFriends =
-        senderUser.friends.some((friendId) => friendId.equals(receiverId)) &&
-        receiverUser.friends.some((friendId) => friendId.equals(senderId));
+      // If a file was uploaded, assign its relative path
+      if (req.file) {
+        fileUrl = `/uploads/chatMedia/${req.file.filename}`;
 
-      if (!areFriends) {
-        return res
-          .status(403)
-          .json({ message: "You are not friends with this user" });
+        // Auto-detect type if not provided explicitly
+        if (req.file.mimetype.startsWith("image/")) finalMessageType = "image";
+        else if (req.file.mimetype.startsWith("video/")) finalMessageType = "video";
+        else if (req.file.mimetype.startsWith("audio/")) finalMessageType = "audio";
+        else finalMessageType = "file";
       }
 
-      const message = new Message({
-        sender: senderId,
-        receiver: receiverId,
+      const newMessage = new Message({
+        sender,
+        receiver,
         content: content || "",
-        messageType: messageType || "text",
-        fileUrl: req.body.fileUrl || "",
+        messageType: finalMessageType,
+        fileUrl,
+        replyTo: replyTo || null,
       });
 
+      await newMessage.save();
+
+      const populatedMsg = await Message.findById(newMessage._id)
+        .populate("sender", "username firstname lastname profilePicture")
+        .populate("receiver", "username firstname lastname profilePicture")
+        .populate({
+          path: "replyTo",
+          populate: { path: "sender", select: "username firstname lastname profilePicture _id" },
+        });
+
+      // Socket relay
+      io.to(receiver.toString()).emit("receiveMessage", populatedMsg);
+
+      res.status(201).json({ success: true, chatMessage: populatedMsg });
+    } catch (error) {
+      res.status(500).json({ message: error.message });
+    }
+  };
+
+  const editMessage = async (req, res) => {
+    const { messageId, newContent, content } = req.body;
+    const updatedText = newContent !== undefined ? newContent : content;
+
+    if (!updatedText || typeof updatedText !== "string" || !updatedText.trim()) {
+      return res.status(400).json({ message: "Updated message content cannot be empty." });
+    }
+
+    if (!messageId) {
+      return res.status(400).json({ message: "messageId is required." });
+    }
+
+    try {
+      if (!mongoose.Types.ObjectId.isValid(messageId)) {
+        return res.status(400).json({ message: "Invalid message ID format." });
+      }
+
+      const message = await Message.findById(messageId);
+
+      if (!message) {
+        return res.status(404).json({ message: "Message not found." });
+      }
+
+      const currentUserId = req.user?._id?.toString() || req.user?.id;
+      if (message.sender.toString() !== currentUserId) {
+        return res.status(403).json({ message: "Not authorized to edit this message." });
+      }
+
+      const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000);
+      const msgTime = message.timestamp || message.createdAt;
+      if (msgTime < tenMinutesAgo) {
+        return res.status(400).json({ message: "Messages can only be edited within 10 minutes of sending." });
+      }
+
+      message.content = updatedText.trim();
+      message.isEdited = true;
+      message.lastEditedAt = new Date();
       await message.save();
 
       const populatedMessage = await Message.findById(message._id)
         .populate("sender", "username firstname lastname profilePicture _id")
         .populate("receiver", "username firstname lastname profilePicture _id");
 
-      io.to(sender).emit("newMessage", populatedMessage);
-      io.to(receiver).emit("newMessage", populatedMessage);
+      const socketIo = req.app.get("io") || global.io;
+      if (socketIo) {
+        socketIo.to(message.sender.toString()).emit("messageEdited", populatedMessage);
+        socketIo.to(message.receiver.toString()).emit("messageEdited", populatedMessage);
+      }
 
-      res.status(201).json({ message: "Message sent", data: populatedMessage });
+      return res.status(200).json({
+        message: "Message edited successfully",
+        data: populatedMessage,
+        updatedMessage: populatedMessage,
+      });
     } catch (err) {
-      console.error("Error in sendMessage:", err);
-      res.status(500).json({ message: `Server error: ${err.message}` });
+      console.error("Error in editMessage:", err);
+      return res.status(500).json({ message: `Server error: ${err.message}` });
     }
   };
 
-  const editMessage = async (req, res) => {
-    const { messageId, newContent } = req.body;
+  const toggleReaction = async (req, res) => {
+    const { messageId, emoji } = req.body;
+    const userId = req.user?.id || req.user?._id;
+
+    if (!mongoose.Types.ObjectId.isValid(messageId) || typeof emoji !== "string" || !emoji.trim()) {
+      return res.status(400).json({ message: "A valid messageId and emoji are required." });
+    }
 
     try {
-        // 1. Convert messageId to ObjectId
-        const objectIdMessageId = new mongoose.Types.ObjectId(messageId);
+      const message = await Message.findById(messageId);
+      if (!message) {
+        return res.status(404).json({ message: "Message not found." });
+      }
 
-        const message = await Message.findById(objectIdMessageId);
+      const userIdString = userId.toString();
+      const isParticipant = [message.sender, message.receiver]
+        .some((participantId) => participantId.toString() === userIdString);
 
-        if (!message) {
-            return res.status(404).json({ message: "Message not found." });
-        }
+      if (!isParticipant) {
+        return res.status(403).json({ message: "You cannot react to this message." });
+      }
 
-        // 2. Correct authorization check (using toString() for comparison)
-        if (message.sender.toString() !== req.user.id) {
-            return res.status(403).json({ message: "Not authorized to edit." });
-        }
+      const existingReaction = message.reactions.find(
+        (reaction) => reaction.userId.toString() === userIdString
+      );
 
-        // 3. Timestamp check: Only allow editing within the last 10 minutes
-        const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000);
-        const msgTime = message.timestamp || message.createdAt;
-        if (msgTime < tenMinutesAgo) {
-            return res.status(400).json({ message: "Messages can only be edited within 10 minutes of sending." });
-        }
+      if (existingReaction?.emoji === emoji.trim()) {
+        message.reactions = message.reactions.filter(
+          (reaction) => reaction.userId.toString() !== userIdString
+        );
+      } else if (existingReaction) {
+        existingReaction.emoji = emoji.trim();
+      } else {
+        message.reactions.push({ userId, emoji: emoji.trim() });
+      }
 
-        message.content = newContent;
-        message.isEdited = true;
-        message.lastEditedAt = new Date();
-        await message.save();
+      await message.save();
 
-        const populatedMessage = await Message.findById(message._id)
-            .populate("sender", "username firstname lastname profilePicture _id")
-            .populate("receiver", "username firstname lastname profilePicture _id");
+      const populatedMessage = await Message.findById(message._id)
+        .populate("sender", "username firstname lastname profilePicture _id")
+        .populate("receiver", "username firstname lastname profilePicture _id")
+        .lean();
 
-        // 4. Emit to correct rooms (using the same logic as sendMessage)
-        io.to(message.sender.toString()).emit("messageEdited", populatedMessage);
-        io.to(message.receiver.toString()).emit("messageEdited", populatedMessage);
+      io.to(message.sender.toString()).emit("messageReaction", {
+        messageId: message._id.toString(),
+        reactions: populatedMessage.reactions,
+      });
+      io.to(message.receiver.toString()).emit("messageReaction", {
+        messageId: message._id.toString(),
+        reactions: populatedMessage.reactions,
+      });
 
-        res.status(200).json({ message: "Message edited", data: populatedMessage });
+      return res.status(200).json({
+        messageId: message._id.toString(),
+        reactions: populatedMessage.reactions,
+      });
     } catch (err) {
-        console.error("Error in editMessage:", err);
-        if (err.name === 'CastError' && err.kind === 'ObjectId') {
-          return res.status(400).json({ message: "Invalid message ID format." });
-        }
-        res.status(500).json({ message: `Server error: ${err.message}` });
+      console.error("Error toggling message reaction:", err);
+      return res.status(500).json({ message: `Server error: ${err.message}` });
     }
-};
+  };
 
-  // soft deletion : i am not actually deleting the message but turning it to isDeleted = true, which will soft delete the message.
   const deleteMessage = async (req, res) => {
     const { messageId } = req.body;
 
@@ -187,13 +260,11 @@ module.exports = (io) => {
         return res.status(403).json({ message: "Not authorized to delete." });
       }
 
-      // Only allow deletion within the last 10 minutes
       const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000);
       const msgTime = message.timestamp || message.createdAt;
       if (msgTime < tenMinutesAgo) {
         return res.status(400).json({ message: "Messages can only be deleted within 10 minutes of sending." });
       }
-
 
       message.isDeleted = true;
       await message.save();
@@ -205,16 +276,13 @@ module.exports = (io) => {
       io.to(message.sender.toString()).emit("messageDeleted", populatedMessage);
       io.to(message.receiver.toString()).emit("messageDeleted", populatedMessage);
 
-      res
-        .status(200)
-        .json({ message: "Message deleted", data: populatedMessage });
+      res.status(200).json({ message: "Message deleted", data: populatedMessage });
     } catch (err) {
       console.error("Error in deleteMessage:", err);
       res.status(500).json({ message: `Server error: ${err.message}` });
     }
   };
 
-  // Delete entire conversation between current user and friend
   const deleteConversation = async (req, res) => {
     const { friendId } = req.body;
     const userId = req.user.id;
@@ -227,7 +295,6 @@ module.exports = (io) => {
       const userObjId = new mongoose.Types.ObjectId(userId);
       const friendObjId = new mongoose.Types.ObjectId(friendId);
 
-      // Soft delete all messages between these two users
       await Message.updateMany(
         {
           $or: [
@@ -239,7 +306,6 @@ module.exports = (io) => {
         { $set: { isDeleted: true } }
       );
 
-      // Real-time socket event (optional: updates both users if desired)
       io.to(userId).emit("conversationDeleted", { friendId });
       io.to(friendId).emit("conversationDeleted", { friendId: userId });
 
@@ -250,7 +316,12 @@ module.exports = (io) => {
     }
   };
 
-  return { getMessages, sendMessage, editMessage, deleteMessage, deleteConversation  };
+  return {
+    getMessages,
+    sendMessage,
+    editMessage,
+    toggleReaction,
+    deleteMessage,
+    deleteConversation,
+  };
 };
-
-
