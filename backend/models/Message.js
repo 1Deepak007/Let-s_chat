@@ -1,4 +1,3 @@
-const User = require('./User');
 const mongoose = require("mongoose");
 
 const messageSchema = new mongoose.Schema({
@@ -6,14 +5,22 @@ const messageSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
     required: true,
-    index: true,  // Indexing for fast lookups
+    index: true,
   },
   receiver: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
     required: true,
-    index: true,  // Indexing for fast lookups
+    index: true,
   },
+  // ✅ Encrypted content storage
+  encryptedContent: {
+    encrypted: String,
+    iv: String,
+    salt: String,
+    authTag: String,
+  },
+  // ⚠️ Legacy field - keep for backward compatibility, but don't use for new messages
   content: {
     type: String,
     default: '',
@@ -23,12 +30,12 @@ const messageSchema = new mongoose.Schema({
     enum: ["text", "image", "video", "audio", "file"],
     required: true,
   },
-  fileUrl: { 
-    type: String,  // Stores URL/path of media (if messageType is not "text")
+  fileUrl: {
+    type: String,
   },
   isRead: {
     type: Boolean,
-    default: false,  // Track if the receiver has read the message
+    default: false,
   },
   timestamp: {
     type: Date,
@@ -36,7 +43,7 @@ const messageSchema = new mongoose.Schema({
   },
   isDeleted: {
     type: Boolean,
-    default: false,  // Soft delete functionality
+    default: false,
   },
   isEdited: {
     type: Boolean,
@@ -63,9 +70,8 @@ const messageSchema = new mongoose.Schema({
     ref: 'Message',
     default: null,
   },
-}, { timestamps: true });  // Automatically adds createdAt & updatedAt fields
+}, { timestamps: true });
 
-// Index sender and receiver for faster querying
 messageSchema.index({ sender: 1, receiver: 1, timestamp: -1 });
 
 module.exports = mongoose.model('Message', messageSchema);

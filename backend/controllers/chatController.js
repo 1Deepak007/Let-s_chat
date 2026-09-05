@@ -1,70 +1,52 @@
 const Message = require("../models/Message");
 const User = require("../models/User");
 const mongoose = require("mongoose");
+const EncryptionService = require("../utils/encryption");
 
 module.exports = (io) => {
-  // Fetch chat messages
+  
+  // Fetch chat messages with decryption
   const getMessages = async (req, res) => {
     const { senderId, receiverId } = req.body;
 
     try {
-      // Validate IDs (ensure both are valid MongoDB ObjectId)
-      if (
-        !mongoose.Types.ObjectId.isValid(senderId) ||
-        !mongoose.Types.ObjectId.isValid(receiverId)
-      ) {
+      if (!mongoose.Types.ObjectId.isValid(senderId) || !mongoose.Types.ObjectId.isValid(receiverId)) {
         return res.status(400).json({ message: "Invalid user ID format" });
       }
 
-      // Convert to ObjectId
       const senderObjId = new mongoose.Types.ObjectId(senderId);
       const receiverObjId = new mongoose.Types.ObjectId(receiverId);
 
-      // Fetch sender and receiver users
       const [senderUser, receiverUser] = await Promise.all([
         User.findById(senderObjId),
         User.findById(receiverObjId),
       ]);
 
-      // Check if sender and receiver exist
       if (!senderUser || !receiverUser) {
-        return res
-          .status(404)
-          .json({ message: "Sender or receiver user not found" });
+        return res.status(404).json({ message: "Sender or receiver user not found" });
       }
 
-      // Safe string-based friendship check (handles both String & ObjectId entries)
-      const senderIdStr = senderObjId.toString();
-      const receiverIdStr = receiverObjId.toString();
+      // ✅ Use the correct encryption method
+      // We don't actually need to derive a key here - decryption will happen in the frontend
+      // The backend just passes the encrypted data through
 
-      const areFriends =
-        senderUser.friends.some((f) => f.toString() === receiverIdStr) ||
-        receiverUser.friends.some((f) => f.toString() === senderIdStr);
-
-      if (!areFriends) {
-        return res
-          .status(403)
-          .json({ message: "You are not friends with this user" });
-      }
-
-      // Fetch messages between sender and receiver
       const messages = await Message.find({
-        $or: [
-          { sender: senderObjId, receiver: receiverObjId },
-          { sender: receiverObjId, receiver: senderObjId },
-        ],
-        isDeleted: false,
-      })
-        .sort({ timestamp: 1 }) // Sort by timestamp (ascending order)
-        .populate("sender", "username firstname lastname profilePicture _id")
-        .populate("receiver", "username firstname lastname profilePicture _id")
-        .populate({
-          path: "replyTo",
-          populate: { path: "sender", select: "username firstname lastname profilePicture _id" },
-        })
-        .lean();
+    $or: [
+      { sender: senderObjId, receiver: receiverObjId },
+      { sender: receiverObjId, receiver: senderObjId },
+    ],
+    isDeleted: false,
+  })
+    .sort({ timestamp: 1 })
+    .populate("sender", "username firstname lastname profilePicture _id")
+    .populate("receiver", "username firstname lastname profilePicture _id")
+    .populate({
+      path: "replyTo",
+      populate: { path: "sender", select: "username firstname lastname profilePicture _id" },
+    })
+    .lean();
 
-      // Return all messages sorted by timestamp
+      // Return messages as-is - frontend will decrypt
       res.status(200).json(messages);
     } catch (err) {
       console.error("Error fetching conversation:", err);
@@ -72,60 +54,80 @@ module.exports = (io) => {
     }
   };
 
-  // Send message and emit real-time event
-  const sendMessage = async (req, res) => {
-    try {
-      const { receiver, content, messageType, replyTo } = req.body;
-      const sender = req.user.id || req.user._id;
+  // Send message with encryption
+const sendMessage = async (req, res) => {
+  try {
+    const { receiver, content, messageType, replyTo, encryptedContent } = req.body;
+    const sender = req.user.id || req.user._id;
 
-      let fileUrl = null;
-      let finalMessageType = messageType || "text";
+    let fileUrl = null;
+    let finalMessageType = messageType || "text";
+    let encryptedData = null;
 
-      if (replyTo && !mongoose.Types.ObjectId.isValid(replyTo)) {
-        return res.status(400).json({ message: "Invalid reply message ID." });
+    if (replyTo && !mongoose.Types.ObjectId.isValid(replyTo)) {
+      return res.status(400).json({ message: "Invalid reply message ID." });
+    }
+
+    // Handle file uploads
+    if (req.file) {
+      fileUrl = req.file.path;
+      if (req.file.mimetype.startsWith("image/")) finalMessageType = "image";
+      else if (req.file.mimetype.startsWith("video/")) finalMessageType = "video";
+      else if (req.file.mimetype.startsWith("audio/")) finalMessageType = "audio";
+      else finalMessageType = "file";
+    }
+
+    // ✅ IMPORTANT: If client sent encryptedContent, use it directly
+    if (encryptedContent && typeof encryptedContent === 'object') {
+      console.log('📦 Using client-provided encrypted content');
+      encryptedData = encryptedContent;
+    } 
+    // ✅ Fallback: If client sent plain text, encrypt on server
+    else if (content && finalMessageType === "text") {
+      console.log('🔐 Server encrypting message (fallback)');
+      try {
+        encryptedData = EncryptionService.encrypt(content, sender, receiver);
+      } catch (error) {
+        console.error('Server encryption failed:', error);
+        encryptedData = null;
       }
+    }
 
-      // If a file was uploaded, assign its relative path
-      if (req.file) {
-        fileUrl = fileUrl;
+    // ✅ Create message with encrypted content
+    const newMessage = new Message({
+      sender,
+      receiver,
+      content: encryptedData ? "" : (content || ""), // Store empty if encrypted
+      encryptedContent: encryptedData, // Store encrypted data
+      messageType: finalMessageType,
+      fileUrl,
+      replyTo: replyTo || null,
+    });
 
-        // Auto-detect type if not provided explicitly
-        if (req.file.mimetype.startsWith("image/")) finalMessageType = "image";
-        else if (req.file.mimetype.startsWith("video/")) finalMessageType = "video";
-        else if (req.file.mimetype.startsWith("audio/")) finalMessageType = "audio";
-        else finalMessageType = "file";
-      }
+    console.log('💾 Saving message with encryptedContent:', !!encryptedData);
 
-      const newMessage = new Message({
-        sender,
-        receiver,
-        content: content || "",
-        messageType: finalMessageType,
-        fileUrl,
-        replyTo: replyTo || null,
+    await newMessage.save();
+
+    const populatedMsg = await Message.findById(newMessage._id)
+      .populate("sender", "username firstname lastname profilePicture")
+      .populate("receiver", "username firstname lastname profilePicture")
+      .populate({
+        path: "replyTo",
+        populate: { path: "sender", select: "username firstname lastname profilePicture _id" },
       });
 
-      await newMessage.save();
+    // Socket relay - send the message
+    io.to(receiver.toString()).emit("receiveMessage", populatedMsg);
 
-      const populatedMsg = await Message.findById(newMessage._id)
-        .populate("sender", "username firstname lastname profilePicture")
-        .populate("receiver", "username firstname lastname profilePicture")
-        .populate({
-          path: "replyTo",
-          populate: { path: "sender", select: "username firstname lastname profilePicture _id" },
-        });
-
-      // Socket relay
-      io.to(receiver.toString()).emit("receiveMessage", populatedMsg);
-
-      res.status(201).json({ success: true, chatMessage: populatedMsg });
-    } catch (error) {
-      res.status(500).json({ message: error.message });
-    }
-  };
-
+    res.status(201).json({ success: true, chatMessage: populatedMsg });
+  } catch (error) {
+    console.error('Send message error:', error);
+    res.status(500).json({ message: error.message });
+  }
+};
+  // Edit message with encryption
   const editMessage = async (req, res) => {
-    const { messageId, newContent, content } = req.body;
+    const { messageId, newContent, content, encryptedContent } = req.body;
     const updatedText = newContent !== undefined ? newContent : content;
 
     if (!updatedText || typeof updatedText !== "string" || !updatedText.trim()) {
@@ -158,7 +160,26 @@ module.exports = (io) => {
         return res.status(400).json({ message: "Messages can only be edited within 10 minutes of sending." });
       }
 
-      message.content = updatedText.trim();
+      // ✅ If client sent encrypted content, use it
+      if (encryptedContent && typeof encryptedContent === 'object') {
+        message.encryptedContent = encryptedContent;
+        message.content = "";
+      } else {
+        // For backward compatibility - encrypt on server
+        try {
+          const senderId = message.sender.toString();
+          const receiverId = message.receiver.toString();
+          const newEncryptedData = EncryptionService.encrypt(updatedText.trim(), senderId, receiverId);
+          message.encryptedContent = newEncryptedData;
+          message.content = "";
+        } catch (error) {
+          console.error('Server encryption failed for edit:', error);
+          // Fallback to plain text
+          message.content = updatedText.trim();
+          message.encryptedContent = null;
+        }
+      }
+
       message.isEdited = true;
       message.lastEditedAt = new Date();
       await message.save();
@@ -167,7 +188,8 @@ module.exports = (io) => {
         .populate("sender", "username firstname lastname profilePicture _id")
         .populate("receiver", "username firstname lastname profilePicture _id");
 
-      const socketIo = req.app.get("io") || global.io;
+      // Emit edited message
+      const socketIo = req.app.get("io") || global.io || io;
       if (socketIo) {
         socketIo.to(message.sender.toString()).emit("messageEdited", populatedMessage);
         socketIo.to(message.receiver.toString()).emit("messageEdited", populatedMessage);
@@ -183,6 +205,7 @@ module.exports = (io) => {
       return res.status(500).json({ message: `Server error: ${err.message}` });
     }
   };
+
 
   const toggleReaction = async (req, res) => {
     const { messageId, emoji } = req.body;

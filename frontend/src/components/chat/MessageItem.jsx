@@ -129,14 +129,14 @@ const MessageItem = ({ message, isOwn, onEdit, onDelete, onReply, onReact, curre
   return (
     <div
       id={`message-${messageId}`}
-      className={`flex flex-col ${isOwn ? 'items-end' : 'items-start'}
+      className={`flex flex-col-reverse ${isOwn ? 'items-end' : 'items-start'}
       mb-4 group transition-colors duration-500 p-0 rounded-lg`}
     >
       <div className="relative max-w-[85%] sm:max-w-[70%]" ref={menuRef}>
         <div
           className={`relative px-3.5 rounded-2xl shadow-sm ${isOwn
-              ? 'bg-gradient-to-br from-primary-500 to-primary-600 text-white rounded-br-md'
-              : 'bg-white text-gray-800 border border-gray-200 rounded-bl-md dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700'
+            ? 'bg-gradient-to-br from-primary-500 to-primary-600 text-white rounded-br-md'
+            : 'bg-white text-gray-800 border border-gray-200 rounded-bl-md dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700'
             }`}
         >
           {/* Action Dropdown Trigger */}
@@ -154,8 +154,8 @@ const MessageItem = ({ message, isOwn, onEdit, onDelete, onReply, onReact, curre
             <div
               onClick={() => onScrollToMessage(message.replyTo._id || message.replyTo.id || message.replyTo)}
               className={`mb-1 pt-2 px-3 rounded text-xs cursor-pointer border-l-4 transition ${isOwn
-                  ? 'bg-black/15 border-white/80 text-white/90 hover:bg-black/25'
-                  : 'bg-gray-100 dark:bg-gray-700/60 border-primary-500 text-gray-700 dark:text-gray-200 hover:bg-gray-200'
+                ? 'bg-black/15 border-white/80 text-white/90 hover:bg-black/25'
+                : 'bg-gray-100 dark:bg-gray-700/60 border-primary-500 text-gray-700 dark:text-gray-200 hover:bg-gray-200'
                 }`}
             >
               {renderQuotedMessage(message.replyTo)}
@@ -276,8 +276,8 @@ const MessageItem = ({ message, isOwn, onEdit, onDelete, onReply, onReact, curre
                   key={emoji}
                   onClick={() => onReact(messageId, emoji)}
                   className={`flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border shadow-xs transition ${hasReacted
-                      ? 'bg-primary-50 border-primary-300 text-primary-600 dark:bg-primary-900/40 dark:border-primary-700 dark:text-primary-300'
-                      : 'bg-white border-gray-200 text-gray-600 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-300'
+                    ? 'bg-primary-50 border-primary-300 text-primary-600 dark:bg-primary-900/40 dark:border-primary-700 dark:text-primary-300'
+                    : 'bg-white border-gray-200 text-gray-600 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-300'
                     }`}
                 >
                   <span className="leading-none text-md">{emoji}</span>

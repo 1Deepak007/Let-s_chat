@@ -22,7 +22,9 @@ import {
   createEditMessageHandler,
   createDeleteMessageHandler
 } from '../controllers/ChatPage';
-import { toggleReaction } from '../api/chatApi';
+import { toggleReaction, getMessages, sendMessage, editMessage } from '../api/chatApi';
+import { encryptMessage, decryptMessage } from '../utils/encryption';
+import { toast } from 'react-toastify';
 
 const ChatPage = () => {
   const { user } = useAuth();
@@ -69,11 +71,10 @@ const ChatPage = () => {
     if (friendId && friends.length > 0) {
       const friend = friends.find((f) => String(f._id) === String(friendId));
       if (friend) {
-        handleSelectFriend({
-          friend,
-          setSelectedFriend,
-          fetchMessages,
+        setSelectedFriend(friend);
+        fetchMessagesWithDecryption({
           currentUserId,
+          friendId: friend._id,
           setMessages
         });
       }
@@ -91,19 +92,109 @@ const ChatPage = () => {
   useEffect(() => {
     if (!socket) return;
 
-    const handleReceiveMsg = createReceiveMessageHandler({
-      selectedFriend,
-      user,
-      setMessages
+    const handleReceiveMsg = async (incomingMessage) => {
+      const senderId = typeof incomingMessage.sender === 'object'
+    ? incomingMessage.sender?._id
+    : incomingMessage.sender;
+
+  const receiverId = typeof incomingMessage.receiver === 'object'
+    ? incomingMessage.receiver?._id
+    : incomingMessage.receiver;
+
+  const activeFriendId = selectedFriend?._id;
+  const currentUserId = user?._id || user?.id;
+
+  if (
+    (String(senderId) === String(activeFriendId) && String(receiverId) === String(currentUserId)) ||
+    (String(senderId) === String(currentUserId) && String(receiverId) === String(activeFriendId))
+  ) {
+    let decryptedContent = incomingMessage.content || '';
+    
+    if (incomingMessage.encryptedContent && incomingMessage.encryptedContent.encrypted) {
+      try {
+        const decryptSenderId = String(senderId) === String(currentUserId) ? senderId : receiverId;
+        const decryptReceiverId = String(senderId) === String(currentUserId) ? receiverId : senderId;
+        
+        decryptedContent = await decryptMessage(
+          incomingMessage.encryptedContent,
+          decryptSenderId,
+          decryptReceiverId
+        );
+      } catch (error) {
+        console.error('Failed to decrypt incoming message:', error);
+        decryptedContent = '🔒 [Encrypted message]';
+      }
+    }
+
+    setMessages((prev) => {
+      const incomingId = incomingMessage._id || incomingMessage.id;
+      if (prev.some((m) => String(m._id || m.id) === String(incomingId))) return prev;
+      return [{
+        ...incomingMessage,
+        content: decryptedContent,
+        isEncrypted: !!incomingMessage.encryptedContent
+      }, ...prev];
     });
+  }
+    };
 
     const handleTypingEvt = createTypingHandler({
       selectedFriend,
       setIsTyping
     });
 
-    const handleEditMsg = createEditMessageHandler({ setMessages });
-    const handleDeleteMsg = createDeleteMessageHandler({ setMessages });
+    const handleEditMsg = async (updatedMessage) => {
+      if (!updatedMessage) return;
+
+      const updatedId = updatedMessage._id || updatedMessage.id;
+
+      let decryptedContent = updatedMessage.content || '';
+      if (updatedMessage.encryptedContent && updatedMessage.encryptedContent.encrypted) {
+        try {
+          const senderId = typeof updatedMessage.sender === 'object'
+            ? updatedMessage.sender?._id
+            : updatedMessage.sender;
+          const receiverId = typeof updatedMessage.receiver === 'object'
+            ? updatedMessage.receiver?._id
+            : updatedMessage.receiver;
+
+          decryptedContent = await decryptMessage(
+            updatedMessage.encryptedContent,
+            senderId,
+            receiverId
+          );
+        } catch (error) {
+          console.error('Failed to decrypt edited message:', error);
+          decryptedContent = '🔒 [Encrypted message]';
+        }
+      }
+
+      setMessages((prevMessages) =>
+        prevMessages.map((msg) => {
+          const currentId = msg._id || msg.id;
+          if (String(currentId) === String(updatedId)) {
+            return {
+              ...msg,
+              ...updatedMessage,
+              content: decryptedContent,
+              isEdited: true,
+              isEncrypted: true,
+              lastEditedAt: updatedMessage.lastEditedAt || new Date()
+            };
+          }
+          return msg;
+        })
+      );
+    };
+    const handleDeleteMsg = (deletedData) => {
+      const deletedId = typeof deletedData === 'object'
+        ? (deletedData.messageId || deletedData.id || deletedData._id)
+        : deletedData;
+
+      setMessages((prevMessages) =>
+        prevMessages.filter((msg) => String(msg._id || msg.id) !== String(deletedId))
+      );
+    };
 
     socket.on('receiveMessage', handleReceiveMsg);
     socket.on('newMessage', handleReceiveMsg);
@@ -112,6 +203,7 @@ const ChatPage = () => {
     socket.on('editMessage', handleEditMsg);
     socket.on('messageDeleted', handleDeleteMsg);
     socket.on('deleteMessage', handleDeleteMsg);
+
 
     // Sync Reactions over WebSockets
     socket.on('messageReaction', ({ messageId, reactions }) => {
@@ -139,57 +231,189 @@ const ChatPage = () => {
 
   // Handler wrappers
   const onSelectFriend = (friend) => {
-    handleSelectFriend({
-      friend,
-      setSelectedFriend,
-      fetchMessages,
-      currentUserId,
-      setMessages
-    });
-  };
-
-  const onSendMessage = async (payload) => {
-    if (!selectedFriend) return;
-
-    try {
-      setSending(true);
-
-      let text = payload.text || '';
-      let file = payload.file || null;
-      let messageType = 'text';
-
-      if (payload.gifUrl) {
-        text = payload.gifUrl;
-        messageType = 'image';
-      } else if (file) {
-        if (file.type.startsWith('image/')) messageType = 'image';
-        else if (file.type.startsWith('video/')) messageType = 'video';
-        else if (file.type.startsWith('audio/')) messageType = 'audio';
-        else messageType = 'file';
-      } else if (!text.trim()) {
-        return;
-      }
-
-      await handleSendMessage({
-        text,
-        file,
-        messageType,
-        replyTo: payload.replyTo,
-        selectedFriend,
-        user,
-        socket,
-        isConnected,
-        setSending,
+    setSelectedFriend(friend);
+    if (friend?._id) {
+      fetchMessagesWithDecryption({
+        currentUserId,
+        friendId: friend._id,
         setMessages
       });
-    } catch (err) {
-      console.error('Failed to send message:', err);
-    } finally {
-      setSending(false);
-      setReplyingTo(null);
     }
   };
 
+  // 🔐 Custom send handler with encryption
+  const handleSendMessageWithEncryption = async ({
+    text,
+    file,
+    messageType,
+    replyTo,
+    selectedFriend,
+    user,
+    socket,
+    isConnected,
+    setSending,
+    setMessages,
+    encryptedContent
+  }) => {
+    try {
+      let payload;
+
+      if (file) {
+        payload = new FormData();
+        payload.append('receiver', selectedFriend._id);
+        payload.append('content', text || '');
+        payload.append('messageType', messageType);
+        payload.append('file', file);
+        if (replyTo) payload.append('replyTo', replyTo);
+        if (encryptedContent) {
+          payload.append('encryptedContent', JSON.stringify(encryptedContent));
+        }
+      } else {
+        payload = {
+          receiver: selectedFriend._id,
+          content: text || '',
+          messageType,
+          ...(replyTo && { replyTo }),
+          ...(encryptedContent && { encryptedContent })
+        };
+      }
+
+      const response = await sendMessage(payload);
+      const savedMessage = response?.data?.chatMessage || response?.data?.data || response?.data;
+
+      if (savedMessage) {
+        // Add to local state with decrypted content
+        setMessages((prev) => {
+          const exists = prev.some(
+            (m) => (m._id || m.id) === (savedMessage._id || savedMessage.id)
+          );
+          if (exists) return prev;
+          return [{
+            ...savedMessage,
+            content: text || '',
+            isEncrypted: !!encryptedContent
+          }, ...prev];
+        });
+
+        // Emit via socket
+        if (socket?.connected) {
+          socket.emit('sendMessage', {
+            ...savedMessage,
+            content: '', // Don't send plain text
+            encryptedContent: encryptedContent
+          });
+        }
+      }
+    } catch (error) {
+      console.error('Error sending message:', error);
+      toast.error('Failed to send message');
+    }
+  };
+
+  const onSendMessage = async (payload) => {
+  if (!selectedFriend) return;
+
+  try {
+    setSending(true);
+
+    let text = payload.text || '';
+    let file = payload.file || null;
+    let messageType = 'text';
+
+    if (payload.gifUrl) {
+      text = payload.gifUrl;
+      messageType = 'image';
+    } else if (file) {
+      if (file.type.startsWith('image/')) messageType = 'image';
+      else if (file.type.startsWith('video/')) messageType = 'video';
+      else if (file.type.startsWith('audio/')) messageType = 'audio';
+      else messageType = 'file';
+    } else if (!text.trim()) {
+      return;
+    }
+
+    // 🔐 Encrypt the message before sending (for text messages)
+    let encryptedData = null;
+    let contentToSend = text || '';
+
+    if (messageType === 'text' && text && text.trim()) {
+      try {
+        console.log('🔐 Frontend encrypting message');
+        encryptedData = await encryptMessage(text, currentUserId, selectedFriend._id);
+        contentToSend = ''; // Don't send plain text
+        console.log('✅ Frontend encryption complete');
+      } catch (error) {
+        console.error('Encryption failed:', error);
+        // Fallback to plain text if encryption fails
+        contentToSend = text;
+        encryptedData = null;
+      }
+    }
+
+    // ✅ Prepare payload with encrypted content
+    let payloadToSend;
+    
+    if (file) {
+      payloadToSend = new FormData();
+      payloadToSend.append('receiver', selectedFriend._id);
+      payloadToSend.append('content', contentToSend);
+      payloadToSend.append('messageType', messageType);
+      payloadToSend.append('file', file);
+      if (payload.replyTo) payloadToSend.append('replyTo', payload.replyTo);
+      if (encryptedData) {
+        payloadToSend.append('encryptedContent', JSON.stringify(encryptedData));
+      }
+    } else {
+      payloadToSend = {
+        receiver: selectedFriend._id,
+        content: contentToSend,
+        messageType,
+        ...(payload.replyTo && { replyTo: payload.replyTo }),
+      };
+      
+      // ✅ Send encryptedContent as object, not stringified
+      if (encryptedData) {
+        payloadToSend.encryptedContent = encryptedData;
+      }
+    }
+
+    console.log('📤 Sending payload:', {
+      hasEncryptedContent: !!encryptedData,
+      messageType,
+      contentLength: contentToSend.length,
+    });
+
+    // Send the message
+    const response = await sendMessage(payloadToSend);
+    const savedMessage = response?.data?.chatMessage || response?.data?.data || response?.data;
+
+    if (savedMessage) {
+      // Add to local state with decrypted content
+      setMessages((prev) => {
+        const exists = prev.some(
+          (m) => (m._id || m.id) === (savedMessage._id || savedMessage.id)
+        );
+        if (exists) return prev;
+        return [{
+          ...savedMessage,
+          content: text || '',
+          isEncrypted: !!encryptedData
+        }, ...prev];
+      });
+
+      // Emit via socket
+      if (socket?.connected) {
+        socket.emit('sendMessage', savedMessage);
+      }
+    }
+  } catch (err) {
+    console.error('Failed to send message:', err);
+    toast.error('Failed to send message');
+  } finally {
+    setSending(false);
+    setReplyingTo(null);
+  }
+};
   const onToggleReaction = async (messageId, emoji) => {
     const previousMessages = messages;
     const message = messages.find((item) => String(item._id || item.id) === String(messageId));
@@ -241,16 +465,128 @@ const ChatPage = () => {
     }
   };
 
-  const onEditMessage = (messageId, newContent) => {
-    handleEditMessage({
-      messageId,
-      newContent,
-      userId: currentUserId,
-      socket,
-      isConnected,
-      setMessages,
-      setEditingMessage
+  const fetchMessagesWithDecryption = async ({ currentUserId, friendId, setMessages }) => {
+  if (!currentUserId || !friendId) return;
+  try {
+    const response = await getMessages({
+      senderId: currentUserId,
+      receiverId: friendId,
     });
+
+    const messageList = Array.isArray(response.data)
+      ? response.data
+      : Array.isArray(response.data?.messages)
+        ? response.data.messages
+        : Array.isArray(response.data?.data)
+          ? response.data.data
+          : [];
+
+    console.log('📥 Fetched messages count:', messageList.length);
+    console.log('📥 First message sample:', messageList[0]?._id);
+
+    // 🔐 Decrypt all encrypted messages with error handling
+    const decryptedMessages = await Promise.all(
+      messageList.map(async (msg) => {
+        // Check if message has encrypted content
+        if (msg.encryptedContent && msg.encryptedContent.encrypted) {
+          console.log(`🔓 Attempting to decrypt message: ${msg._id}`);
+          try {
+            // Determine sender and receiver IDs
+            const senderId = typeof msg.sender === 'object' ? msg.sender?._id : msg.sender;
+            const receiverId = typeof msg.receiver === 'object' ? msg.receiver?._id : msg.receiver;
+            
+            console.log(`🔑 Using IDs: sender=${senderId}, receiver=${receiverId}`);
+            
+            // Try to decrypt
+            const decryptedContent = await decryptMessage(
+              msg.encryptedContent,
+              senderId,
+              receiverId
+            );
+            
+            console.log(`✅ Decrypted message: ${msg._id}`);
+            return {
+              ...msg,
+              content: decryptedContent || '🔒 [Empty encrypted message]',
+              isEncrypted: true
+            };
+          } catch (error) {
+            console.error(`❌ Failed to decrypt message ${msg._id}:`, error);
+            return {
+              ...msg,
+              content: '🔒 [Unable to decrypt]',
+              isEncrypted: true,
+              decryptionError: true
+            };
+          }
+        }
+        // For non-encrypted messages, return as is
+        return msg;
+      })
+    );
+
+    setMessages(decryptedMessages);
+    console.log('✅ Messages loaded and decrypted');
+  } catch (error) {
+    console.error('Error fetching messages:', error);
+    toast.error('Failed to load messages');
+  }
+};
+  const onEditMessage = async (messageId, newContent) => {
+    try {
+      // 🔐 Encrypt the edited content
+      let encryptedData = null;
+      let contentToSend = newContent;
+
+      try {
+        encryptedData = await encryptMessage(newContent, currentUserId, selectedFriend._id);
+        contentToSend = ''; // Don't send plain text
+      } catch (error) {
+        console.error('Encryption failed for edit:', error);
+        // Fallback to plain text
+        contentToSend = newContent;
+      }
+
+      const response = await editMessage({
+        messageId,
+        newContent: contentToSend,
+        userId: currentUserId,
+        encryptedContent: encryptedData // Pass encrypted data
+      });
+
+      const updatedMessage = response.data?.updatedMessage || response.data?.data || response.data;
+
+      setMessages((prev) =>
+        prev.map((msg) => {
+          const currentId = msg._id || msg.id;
+          if (String(currentId) === String(messageId)) {
+            return {
+              ...msg,
+              ...updatedMessage,
+              content: newContent, // Show plain text locally
+              isEdited: true,
+              isEncrypted: true,
+              lastEditedAt: updatedMessage.lastEditedAt || new Date()
+            };
+          }
+          return msg;
+        })
+      );
+
+      if (socket?.connected) {
+        socket.emit('editMessage', {
+          ...updatedMessage,
+          content: '', // Don't send plain text
+          encryptedContent: encryptedData
+        });
+      }
+
+      setEditingMessage(null);
+      toast.success('Message edited');
+    } catch (error) {
+      console.error('Edit message error:', error);
+      toast.error(error?.response?.data?.message || 'Failed to edit message');
+    }
   };
 
   const onDeleteMessage = (messageId) => {
@@ -309,8 +645,8 @@ const ChatPage = () => {
                       key={friend._id}
                       onClick={() => onSelectFriend(friend)}
                       className={`w-full flex items-center gap-3 p-3 rounded-lg transition text-left ${isActive
-                          ? 'bg-primary-50 dark:bg-primary-900/30 text-primary-600 dark:text-primary-400 font-semibold shadow-sm'
-                          : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800/60'
+                        ? 'bg-primary-50 dark:bg-primary-900/30 text-primary-600 dark:text-primary-400 font-semibold shadow-sm'
+                        : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800/60'
                         }`}
                     >
                       <div className="relative flex-shrink-0">
@@ -331,8 +667,8 @@ const ChatPage = () => {
                       <div className="flex-1 min-w-0">
                         <p
                           className={`text-sm truncate ${isActive
-                              ? 'font-semibold text-primary-600 dark:text-primary-400'
-                              : 'font-medium text-gray-900 dark:text-gray-100'
+                            ? 'font-semibold text-primary-600 dark:text-primary-400'
+                            : 'font-medium text-gray-900 dark:text-gray-100'
                             }`}
                         >
                           {friend.firstname} {friend.lastname || ''}

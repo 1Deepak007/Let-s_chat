@@ -1,21 +1,17 @@
 const User = require("../models/User");
 const bcrypt = require("bcryptjs");
-const upload = require("../middleware/upload");
-const fs = require("fs");
-
+const { cloudinary } = require("../config/cloudinary"); // Import cloudinary
 
 // get user profile
 exports.getUserProfile = async (req, res) => {
   const userId = req.params.userId;
 
   try {
-    // Assuming your Mongoose model name is User (replace if different)
-    const user = await User.findById(userId); // Project to exclude password field
-    if (!user) return res.status(404).json({ message: `User not found` });
+    const user = await User.findById(userId).select("-password");
+    if (!user) return res.status(404).json({ message: "User not found" });
 
     res.json(user);
   } catch (err) {
-    // console.error('Error in getUserProfile:', err);
     res.status(500).json({ message: `Server error: ${err.message}` });
   }
 };
@@ -24,16 +20,37 @@ exports.getUserProfile = async (req, res) => {
 exports.updateProfilePicture = async (req, res) => {
   try {
     if (!req.file) {
-      return res.status(400).json({ message: "No profile picture uploaded" }); // Important check
+      return res.status(400).json({ message: "No profile picture uploaded" });
     }
 
+    const userId = req.user.id || req.user._id;
+    const user = await User.findById(userId);
+    
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    // ✅ Delete old profile picture from Cloudinary if exists
+    if (user.profilePicture) {
+      try {
+        // Extract public_id from Cloudinary URL
+        const publicId = user.profilePicture.split('/').pop().split('.')[0];
+        await cloudinary.uploader.destroy(`lets-chat/${publicId}`);
+      } catch (err) {
+        console.log('Error deleting old image:', err);
+        // Continue even if deletion fails
+      }
+    }
+
+    // ✅ Store Cloudinary URL from multer
     const updateData = { profilePicture: req.file.path };
 
-    const user = await User.findByIdAndUpdate(req.user.id, updateData, {
+    const updatedUser = await User.findByIdAndUpdate(userId, updateData, {
       new: true,
     }).select("-password");
-    if (!user) return res.status(404).json({ message: "User not found" });
-    res.json({ message: "Profile picture updated successfully", user });
+    
+    res.json({ 
+      message: "Profile picture updated successfully", 
+      user: updatedUser 
+    });
   } catch (err) {
     console.error("Update profile picture error:", err);
     res.status(500).json({ message: "Server error", error: err.message });
@@ -44,8 +61,8 @@ exports.updateProfilePicture = async (req, res) => {
 exports.updateUserProfile = async (req, res) => {
   try {
     const {
-      firstName,
-      lastName,
+      firstname,  // ✅ Match your schema field names
+      lastname,
       username,
       currentLocation,
       hometown,
@@ -53,22 +70,24 @@ exports.updateUserProfile = async (req, res) => {
       hobbies,
       favoritePlaces,
       bio,
-    } = req.body; // Get all the new fields from the request body
+    } = req.body;
+
     const updateData = {
-      firstname: firstName,
-      lastname: lastName,
+      firstname,
+      lastname,
       username,
       currentLocation,
       hometown,
       profession,
-      hobbies,
-      favoritePlaces,
+      hobbies: hobbies ? hobbies.split(',').map(h => h.trim()) : [], // Convert comma-separated string to array
+      favoritePlaces: favoritePlaces ? favoritePlaces.split(',').map(p => p.trim()) : [],
       bio,
     };
 
     const user = await User.findByIdAndUpdate(req.user.id, updateData, {
       new: true,
     }).select("-password");
+    
     if (!user) return res.status(404).json({ message: "User not found" });
     res.json({ message: "Profile updated successfully", user });
   } catch (err) {
@@ -89,18 +108,12 @@ exports.changePassword = async (req, res) => {
     if (!isMatch)
       return res.status(400).json({ message: "Incorrect old password" });
 
-    // console.log('Old Password Hash:', user.password);
-    // console.log('New Password Before Hashing:', newPassword);
-
-    user.password = newPassword;
-    // user.password = await bcrypt.hash(newPassword, 10);
-    // console.log('New Password After Hashing:', user.password);
-
+    user.password = newPassword; // ✅ Pre-save hook will hash it
     await user.save();
-    // console.log('New Password After Hashing:', user.password);
+    
     res.json({ message: "Password changed successfully" });
   } catch (err) {
-    res.status(500).json({ message: "Server error", error: err });
+    res.status(500).json({ message: "Server error", error: err.message });
   }
 };
 
@@ -109,12 +122,12 @@ exports.unfriend = async (req, res) => {
     const { friendId } = req.params;
     const userId = req.user.id;
 
-    // Use MongoDB's $pull operator to efficiently remove the friend
+    // ✅ Use $pull with proper MongoDB syntax
     await User.findByIdAndUpdate(userId, {
-      $pull: { friends: { userId: friendId } },
+      $pull: { friends: friendId }
     });
     await User.findByIdAndUpdate(friendId, {
-      $pull: { friends: { userId: userId } },
+      $pull: { friends: userId }
     });
 
     res.json({ message: "User unfriended successfully" });
@@ -126,7 +139,7 @@ exports.unfriend = async (req, res) => {
 exports.rejectFriendRequest = async (req, res) => {
   try {
     const { requestId } = req.params;
-    const userId = req.user.id; // User rejecting the request
+    const userId = req.user.id;
 
     const receiver = await User.findById(userId);
     if (!receiver) {
@@ -140,7 +153,7 @@ exports.rejectFriendRequest = async (req, res) => {
       return res.status(404).json({ message: "Request not found" });
     }
 
-    const senderId = request.userId; // ID of the user who sent the request
+    const senderId = request.userId;
     const sender = await User.findById(senderId);
     if (!sender) {
       return res.status(404).json({ message: "Sender not found" });
@@ -179,12 +192,18 @@ exports.updateBackgroundWall = async (req, res) => {
       return res.status(404).json({ message: "User not found" });
     }
 
-    // Delete old background file if it exists locally
-    if (user.backgroundWall && fs.existsSync(user.backgroundWall)) {
-      fs.unlinkSync(user.backgroundWall);
+    // ✅ Delete old background wall from Cloudinary if exists
+    if (user.backgroundWall) {
+      try {
+        const publicId = user.backgroundWall.split('/').pop().split('.')[0];
+        await cloudinary.uploader.destroy(`lets-chat/${publicId}`);
+      } catch (err) {
+        console.log('Error deleting old background:', err);
+        // Continue even if deletion fails
+      }
     }
 
-    // Update document with new path
+    // ✅ Store Cloudinary URL
     user.backgroundWall = req.file.path;
     await user.save();
 
@@ -211,9 +230,15 @@ exports.deleteBackgroundWall = async (req, res) => {
       return res.status(404).json({ message: "User not found" });
     }
 
-    // Delete file from server storage if present
-    if (user.backgroundWall && fs.existsSync(user.backgroundWall)) {
-      fs.unlinkSync(user.backgroundWall);
+    // ✅ Delete background wall from Cloudinary
+    if (user.backgroundWall) {
+      try {
+        const publicId = user.backgroundWall.split('/').pop().split('.')[0];
+        await cloudinary.uploader.destroy(`lets-chat/${publicId}`);
+      } catch (err) {
+        console.log('Error deleting background:', err);
+        // Continue even if deletion fails
+      }
     }
 
     // Reset backgroundWall field in DB

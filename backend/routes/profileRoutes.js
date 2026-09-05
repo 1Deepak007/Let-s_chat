@@ -9,24 +9,23 @@ const {
   updateBackgroundWall,
   deleteBackgroundWall
 } = require('../controllers/profileController');
-const authenticate = require("../middleware/authMiddleware"); // Import auth middleware
-const{upload} = require('../config/cloudinary');
+const authenticate = require("../middleware/authMiddleware");
+const { upload } = require('../config/cloudinary');
 
+const router = express.Router();
 
-module.exports = (upload) => {
-  const router = express.Router();
+// Profile routes
+router.get('/:userId', authenticate, getUserProfile);
+router.put('/change-password', authenticate, changePassword);
+router.put('/update-profile', authenticate, updateUserProfile);
 
-  router.get('/:userId', authenticate, getUserProfile);
-  router.put('/change-password', authenticate, changePassword);
-  
-  router.put('/update-profile', authenticate, updateUserProfile); // For other details
-  router.put('/update-profile-picture', authenticate, upload.single('profilePicture'), updateProfilePicture); // For profile picture only
+// File upload routes - using Cloudinary upload
+router.put('/update-profile-picture', authenticate, upload.single('profilePicture'), updateProfilePicture);
+router.put('/update-background-wall', authenticate, upload.single('backgroundWall'), updateBackgroundWall);
 
-  router.delete('/unfriend/:friendId', authenticate, unfriend);
-  router.put('/reject-request/:requestId', authenticate, rejectFriendRequest);
+// Friend management
+router.delete('/unfriend/:friendId', authenticate, unfriend);
+router.put('/reject-request/:requestId', authenticate, rejectFriendRequest);
+router.delete('/delete-background-wall', authenticate, deleteBackgroundWall);
 
-  router.put('/update-background-wall', authenticate, upload.single('backgroundWall'), updateBackgroundWall);
-  router.delete('/delete-background-wall', authenticate, deleteBackgroundWall);
-
-  return router;
-};
+module.exports = router;
