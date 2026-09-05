@@ -17,6 +17,8 @@ const Message = require("./models/Message");
 const authenticateJWT = require("./middleware/authMiddleware");
 const upload = require("./middleware/upload");
 
+const cloudinary = require("cloudinary").v2;
+
 dotenv.config();
 
 const app = express();
@@ -164,6 +166,23 @@ app.use("/api/chat", authenticateJWT, chatRoutes);
 app.use("/api/friends", authenticateJWT, friendRoutes);
 app.use("/api/profile", authenticateJWT, profileRoutes(upload));
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
+// app.use("/uploads", async(req,res) => {
+//   try{
+//     const result = await cloudinary.uploader.upload(req.file.path, {
+//       folder: 'lets_chat_profiles',
+//     });
+
+//     //Return secure url
+//     res.json({
+//       url: result.secure_url,
+//       public_id: result.public_id
+//     });
+//   }
+//   catch(error){
+//     console.log(error);
+//     res.status(500).json({ error: error.message });
+//   }
+// });
 
 
 server.listen(5000, () => {

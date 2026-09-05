@@ -78,7 +78,7 @@ module.exports = (io) => {
       const { receiver, content, messageType, replyTo } = req.body;
       const sender = req.user.id || req.user._id;
 
-      let fileUrl = "";
+      let fileUrl = null;
       let finalMessageType = messageType || "text";
 
       if (replyTo && !mongoose.Types.ObjectId.isValid(replyTo)) {
@@ -87,7 +87,7 @@ module.exports = (io) => {
 
       // If a file was uploaded, assign its relative path
       if (req.file) {
-        fileUrl = `/uploads/chatMedia/${req.file.filename}`;
+        fileUrl = fileUrl;
 
         // Auto-detect type if not provided explicitly
         if (req.file.mimetype.startsWith("image/")) finalMessageType = "image";

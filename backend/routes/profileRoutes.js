@@ -10,6 +10,8 @@ const {
   deleteBackgroundWall
 } = require('../controllers/profileController');
 const authenticate = require("../middleware/authMiddleware"); // Import auth middleware
+const{upload} = require('../config/cloudinary');
+
 
 module.exports = (upload) => {
   const router = express.Router();
