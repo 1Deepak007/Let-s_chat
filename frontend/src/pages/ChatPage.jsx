@@ -298,9 +298,8 @@ const ChatPage = () => {
     }
   };
 
-  
 
-  // ✅ FIXED: Send message with proper encryption and socket emit
+
   const onSendMessage = async (payload) => {
     if (!selectedFriend) return;
 
@@ -453,72 +452,62 @@ const ChatPage = () => {
     }
   };
 
-  const handleScrollToMessage = (targetId) => {
-    const el = document.getElementById(`message-${targetId}`);
-    if (el) {
-      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      el.classList.add('bg-yellow-200', 'dark:bg-yellow-900/40');
-      setTimeout(() => {
-        el.classList.remove('bg-yellow-200', 'dark:bg-yellow-900/40');
-      }, 1500);
-    }
-  };
 
   const onEditMessage = async (messageId, newContent) => {
-  try {
-    let encryptedData = null;
-    let contentToSend = newContent;
-
     try {
-      encryptedData = await encryptMessage(newContent, currentUserId, selectedFriend._id);
-      contentToSend = ''; // Don't send plain text
-    } catch (error) {
-      console.error('Encryption failed for edit:', error);
-      contentToSend = newContent;
-    }
+      let encryptedData = null;
+      let contentToSend = newContent;
 
-    // ✅ Pass encryptedContent to the API
-    const response = await editMessage({
-      messageId,
-      newContent: contentToSend,
-      userId: currentUserId,
-      encryptedContent: encryptedData // This is now correctly passed
-    });
+      try {
+        encryptedData = await encryptMessage(newContent, currentUserId, selectedFriend._id);
+        contentToSend = ''; // Don't send plain text
+      } catch (error) {
+        console.error('Encryption failed for edit:', error);
+        contentToSend = newContent;
+      }
 
-    const updatedMessage = response.data?.updatedMessage || response.data?.data || response.data;
-
-    setMessages((prev) =>
-      prev.map((msg) => {
-        const currentId = msg._id || msg.id;
-        if (String(currentId) === String(messageId)) {
-          return {
-            ...msg,
-            ...updatedMessage,
-            content: newContent, // Show plain text locally
-            isEdited: true,
-            isEncrypted: !!encryptedData,
-            lastEditedAt: updatedMessage.lastEditedAt || new Date()
-          };
-        }
-        return msg;
-      })
-    );
-
-    if (socket?.connected) {
-      socket.emit('editMessage', {
-        ...updatedMessage,
-        content: '', // Don't send plain text
-        encryptedContent: encryptedData
+      // ✅ Pass encryptedContent to the API
+      const response = await editMessage({
+        messageId,
+        newContent: contentToSend,
+        userId: currentUserId,
+        encryptedContent: encryptedData // This is now correctly passed
       });
-    }
 
-    setEditingMessage(null);
-    toast.success('Message edited');
-  } catch (error) {
-    console.error('Edit message error:', error);
-    toast.error(error?.response?.data?.message || 'Failed to edit message');
-  }
-};
+      const updatedMessage = response.data?.updatedMessage || response.data?.data || response.data;
+
+      setMessages((prev) =>
+        prev.map((msg) => {
+          const currentId = msg._id || msg.id;
+          if (String(currentId) === String(messageId)) {
+            return {
+              ...msg,
+              ...updatedMessage,
+              content: newContent, // Show plain text locally
+              isEdited: true,
+              isEncrypted: !!encryptedData,
+              lastEditedAt: updatedMessage.lastEditedAt || new Date()
+            };
+          }
+          return msg;
+        })
+      );
+
+      if (socket?.connected) {
+        socket.emit('editMessage', {
+          ...updatedMessage,
+          content: '', // Don't send plain text
+          encryptedContent: encryptedData
+        });
+      }
+
+      setEditingMessage(null);
+      toast.success('Message edited');
+    } catch (error) {
+      console.error('Edit message error:', error);
+      toast.error(error?.response?.data?.message || 'Failed to edit message');
+    }
+  };
 
   const onDeleteMessage = (messageId) => {
     handleDeleteMessage({
@@ -550,6 +539,83 @@ const ChatPage = () => {
       </MainLayout>
     );
   }
+
+  const handleScrollToMessage = (targetId) => {
+    // ✅ Handle case where targetId might be an object
+    if (typeof targetId === 'object') {
+      console.log('📦 Received object instead of ID:', targetId);
+      targetId = targetId?._id || targetId?.id || targetId?.messageId || null;
+    }
+
+    if (!targetId) {
+      console.warn('❌ No target ID provided for scrolling');
+      return;
+    }
+
+    console.log('🔍 Attempting to scroll to message:', targetId);
+
+    // Get the scrollable container
+    const chatContainer = document.querySelector('.flex-1.overflow-y-auto.bg-gray-50.dark\\:bg-gray-950');
+
+    if (!chatContainer) {
+      console.warn('❌ Chat container not found');
+      return;
+    }
+
+    // Find the message element
+    let targetElement = document.getElementById(`message-${targetId}`);
+
+    if (!targetElement) {
+      // Try with data attribute
+      targetElement = document.querySelector(`[data-message-id="${targetId}"]`);
+    }
+
+    if (targetElement) {
+      console.log('✅ Found message element, scrolling...');
+
+      // Highlight before scroll
+      targetElement.style.backgroundColor = '#fef08a';
+      targetElement.style.transition = 'background-color 0.5s ease';
+      targetElement.style.borderRadius = '8px';
+      targetElement.style.padding = '4px';
+      targetElement.classList.add('shadow-lg', 'ring-2', 'ring-yellow-400', 'ring-opacity-50');
+
+      // Scroll to the message
+      targetElement.scrollIntoView({
+        behavior: 'smooth',
+        block: 'center',
+        inline: 'nearest'
+      });
+
+      // Remove highlight after 3 seconds
+      setTimeout(() => {
+        targetElement.style.backgroundColor = '';
+        targetElement.style.padding = '';
+        targetElement.classList.remove('shadow-lg', 'ring-2', 'ring-yellow-400', 'ring-opacity-50');
+      }, 3000);
+    } else {
+      console.warn(`❌ Message element with ID ${targetId} not found`);
+
+      // Retry after a delay
+      setTimeout(() => {
+        const retryElement = document.getElementById(`message-${targetId}`);
+        if (retryElement) {
+          console.log('✅ Found message element on retry');
+          retryElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          retryElement.style.backgroundColor = '#fef08a';
+          retryElement.style.transition = 'background-color 0.5s ease';
+          retryElement.style.borderRadius = '8px';
+          retryElement.style.padding = '4px';
+          retryElement.classList.add('shadow-lg', 'ring-2', 'ring-yellow-400', 'ring-opacity-50');
+          setTimeout(() => {
+            retryElement.style.backgroundColor = '';
+            retryElement.style.padding = '';
+            retryElement.classList.remove('shadow-lg', 'ring-2', 'ring-yellow-400', 'ring-opacity-50');
+          }, 3000);
+        }
+      }, 500);
+    }
+  };
 
   return (
     <MainLayout>
@@ -629,7 +695,7 @@ const ChatPage = () => {
                     (id) => String(id) === String(selectedFriend._id)
                   )}
                   messages={messages}
-                  onSelectMessage={(msg) => handleScrollToMessage(msg._id || msg.id)}
+                  onSelectMessage={handleScrollToMessage}
                 />
 
                 <div className="flex-1 p-4 overflow-y-auto bg-gray-50 dark:bg-gray-950">
@@ -699,3 +765,6 @@ const ChatPage = () => {
 };
 
 export default ChatPage;
+
+
+

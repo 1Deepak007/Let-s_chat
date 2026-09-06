@@ -8,9 +8,10 @@ const MessageItem = ({ message, isOwn, onEdit, onDelete, onReply, onReact, curre
   const [showMenu, setShowMenu] = useState(false);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const menuRef = useRef(null);
+  const messageRef = useRef(null); // ✅ Add ref for the message element
 
   const messageId = message._id || message.id;
-  const backendUrl = 'http://localhost:5000';
+  const backendUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000';
   const getFullUrl = (url) => (url?.startsWith('http') ? url : `${backendUrl}${url}`);
 
   const isGifOrImageUrl = (text) => {
@@ -20,7 +21,6 @@ const MessageItem = ({ message, isOwn, onEdit, onDelete, onReply, onReact, curre
       (text.includes('giphy.com') || text.match(/\.(jpeg|jpg|gif|png|webp)$/i))
     );
   };
-
 
   const formattedTime = (() => {
     try {
@@ -42,6 +42,13 @@ const MessageItem = ({ message, isOwn, onEdit, onDelete, onReply, onReact, curre
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  // ✅ Handle scroll to this message when called
+  const handleScrollToSelf = () => {
+    if (onScrollToMessage) {
+      onScrollToMessage(messageId);
+    }
+  };
 
   const renderMediaContent = () => {
     const fileUrl = getFullUrl(message.fileUrl);
@@ -95,26 +102,42 @@ const MessageItem = ({ message, isOwn, onEdit, onDelete, onReply, onReact, curre
       ${quotedMessage.sender.lastname || ''}`.trim()
       : 'Message';
 
+    // ✅ Make quoted message clickable to scroll to it
+    const handleQuotedClick = (e) => {
+      e.stopPropagation();
+      const quotedId = quotedMessage._id || quotedMessage.id || quotedMessage;
+      if (onScrollToMessage) {
+        onScrollToMessage(quotedId);
+      }
+    };
+
     return (
-      <>
+      <div
+        onClick={handleQuotedClick}
+        className={`mb-1 pt-2 px-3 rounded text-xs cursor-pointer border-l-4 transition ${isOwn
+          ? 'bg-black/15 border-white/80 text-white/90 hover:bg-black/25'
+          : 'bg-gray-100 dark:bg-gray-700/60 border-primary-500 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600/60'
+        }`}
+        title="Click to scroll to quoted message"
+      >
         <p className="font-semibold text-[11px] opacity-80">↪ {quotedSender}</p>
         {quotedMessage.content && (
-          <p className="break-words whitespace-pre-wrap">{quotedMessage.content}</p>
+          <p className="break-words whitespace-pre-wrap line-clamp-2">{quotedMessage.content}</p>
         )}
         {quotedMessage.fileUrl && (
           quotedMessage.messageType === 'image' ? (
             <img
               src={getFullUrl(quotedMessage.fileUrl)}
               alt="Quoted attachment"
-              className="object-cover w-16 h-16 mt-1 rounded"
+              className="object-cover w-12 h-12 mt-1 rounded"
             />
           ) : (
-            <p className="mt-1 opacity-80">
-              Attachment: {quotedMessage.content || quotedMessage.messageType}
+            <p className="mt-1 opacity-80 text-[10px]">
+              📎 {quotedMessage.content || quotedMessage.messageType}
             </p>
           )
         )}
-      </>
+      </div>
     );
   };
 
@@ -125,16 +148,17 @@ const MessageItem = ({ message, isOwn, onEdit, onDelete, onReply, onReact, curre
     return acc;
   }, {});
 
-
   return (
     <div
       id={`message-${messageId}`}
-      className={`flex flex-col-reverse ${isOwn ? 'items-end' : 'items-start'}
-      mb-4 group transition-colors duration-500 p-0 rounded-lg`}
+      data-message-id={messageId}
+      ref={messageRef} 
+      className={`flex flex-col ${isOwn ? 'items-end' : 'items-start'}
+      mb-4 group transition-colors duration-500 p-0 rounded-lg scroll-mt-20`} 
     >
       <div className="relative max-w-[85%] sm:max-w-[70%]" ref={menuRef}>
         <div
-          className={`relative px-3.5 rounded-2xl shadow-sm ${isOwn
+          className={`relative px-3.5 py-2 rounded-2xl shadow-sm ${isOwn
             ? 'bg-gradient-to-br from-primary-500 to-primary-600 text-white rounded-br-md'
             : 'bg-white text-gray-800 border border-gray-200 rounded-bl-md dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700'
             }`}
@@ -142,22 +166,16 @@ const MessageItem = ({ message, isOwn, onEdit, onDelete, onReply, onReact, curre
           {/* Action Dropdown Trigger */}
           <button
             onClick={() => setShowMenu((prev) => !prev)}
-            className={`absolute top-1 ${isOwn ? 'left-1 text-white/80 hover:text-white' : 'right-1 text-gray-500 hover:text-gray-800'
+            className={`absolute top-1 ${isOwn ? 'left-1 text-white/80 hover:text-white' : 'right-1 text-gray-500 hover:text-gray-800 dark:hover:text-gray-200'
               } p-0.5 rounded-full transition`}
             title="Message options"
           >
             <RiArrowDropDownLine className="w-6 h-6" />
           </button>
 
-          {/* Quoted Reply Reference */}
+          {/* Quoted Reply Reference - Now clickable */}
           {message.replyTo && (
-            <div
-              onClick={() => onScrollToMessage(message.replyTo._id || message.replyTo.id || message.replyTo)}
-              className={`mb-1 pt-2 px-3 rounded text-xs cursor-pointer border-l-4 transition ${isOwn
-                ? 'bg-black/15 border-white/80 text-white/90 hover:bg-black/25'
-                : 'bg-gray-100 dark:bg-gray-700/60 border-primary-500 text-gray-700 dark:text-gray-200 hover:bg-gray-200'
-                }`}
-            >
+            <div className="mb-1">
               {renderQuotedMessage(message.replyTo)}
             </div>
           )}
