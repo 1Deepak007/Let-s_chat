@@ -4,7 +4,7 @@ const mongoose = require("mongoose");
 const EncryptionService = require("../utils/encryption");
 
 module.exports = (io) => {
-  
+
   // Fetch chat messages with decryption
   const getMessages = async (req, res) => {
     const { senderId, receiverId } = req.body;
@@ -31,20 +31,20 @@ module.exports = (io) => {
       // The backend just passes the encrypted data through
 
       const messages = await Message.find({
-    $or: [
-      { sender: senderObjId, receiver: receiverObjId },
-      { sender: receiverObjId, receiver: senderObjId },
-    ],
-    isDeleted: false,
-  })
-    .sort({ timestamp: 1 })
-    .populate("sender", "username firstname lastname profilePicture _id")
-    .populate("receiver", "username firstname lastname profilePicture _id")
-    .populate({
-      path: "replyTo",
-      populate: { path: "sender", select: "username firstname lastname profilePicture _id" },
-    })
-    .lean();
+        $or: [
+          { sender: senderObjId, receiver: receiverObjId },
+          { sender: receiverObjId, receiver: senderObjId },
+        ],
+        isDeleted: false,
+      })
+        .sort({ timestamp: 1 })
+        .populate("sender", "username firstname lastname profilePicture _id")
+        .populate("receiver", "username firstname lastname profilePicture _id")
+        .populate({
+          path: "replyTo",
+          populate: { path: "sender", select: "username firstname lastname profilePicture _id" },
+        })
+        .lean();
 
       // Return messages as-is - frontend will decrypt
       res.status(200).json(messages);
@@ -55,88 +55,93 @@ module.exports = (io) => {
   };
 
   // Send message with encryption
-const sendMessage = async (req, res) => {
-  try {
-    const { receiver, content, messageType, replyTo, encryptedContent } = req.body;
-    const sender = req.user.id || req.user._id;
+  const sendMessage = async (req, res) => {
+    try {
+      const { receiver, content, messageType, replyTo, encryptedContent } = req.body;
+      const sender = req.user.id || req.user._id;
 
-    let fileUrl = null;
-    let finalMessageType = messageType || "text";
-    let encryptedData = null;
+      let fileUrl = null;
+      let finalMessageType = messageType || "text";
+      let encryptedData = null;
 
-    if (replyTo && !mongoose.Types.ObjectId.isValid(replyTo)) {
-      return res.status(400).json({ message: "Invalid reply message ID." });
-    }
-
-    // Handle file uploads
-    if (req.file) {
-      fileUrl = req.file.path;
-      if (req.file.mimetype.startsWith("image/")) finalMessageType = "image";
-      else if (req.file.mimetype.startsWith("video/")) finalMessageType = "video";
-      else if (req.file.mimetype.startsWith("audio/")) finalMessageType = "audio";
-      else finalMessageType = "file";
-    }
-
-    // ✅ IMPORTANT: If client sent encryptedContent, use it directly
-    if (encryptedContent && typeof encryptedContent === 'object') {
-      console.log('📦 Using client-provided encrypted content');
-      encryptedData = encryptedContent;
-    } 
-    // ✅ Fallback: If client sent plain text, encrypt on server
-    else if (content && finalMessageType === "text") {
-      console.log('🔐 Server encrypting message (fallback)');
-      try {
-        encryptedData = EncryptionService.encrypt(content, sender, receiver);
-      } catch (error) {
-        console.error('Server encryption failed:', error);
-        encryptedData = null;
+      if (replyTo && !mongoose.Types.ObjectId.isValid(replyTo)) {
+        return res.status(400).json({ message: "Invalid reply message ID." });
       }
-    }
 
-    // ✅ Create message with encrypted content
-    const newMessage = new Message({
-      sender,
-      receiver,
-      content: encryptedData ? "" : (content || ""), // Store empty if encrypted
-      encryptedContent: encryptedData, // Store encrypted data
-      messageType: finalMessageType,
-      fileUrl,
-      replyTo: replyTo || null,
-    });
+      // Handle file uploads
+      if (req.file) {
+        fileUrl = req.file.path;
+        if (req.file.mimetype.startsWith("image/")) finalMessageType = "image";
+        else if (req.file.mimetype.startsWith("video/")) finalMessageType = "video";
+        else if (req.file.mimetype.startsWith("audio/")) finalMessageType = "audio";
+        else finalMessageType = "file";
+      }
 
-    console.log('💾 Saving message with encryptedContent:', !!encryptedData);
+      // ✅ IMPORTANT: If client sent encryptedContent, use it directly
+      if (encryptedContent && typeof encryptedContent === 'object') {
+        console.log('📦 Using client-provided encrypted content');
+        encryptedData = encryptedContent;
+      }
+      // ✅ Fallback: If client sent plain text, encrypt on server
+      else if (content && finalMessageType === "text") {
+        console.log('🔐 Server encrypting message (fallback)');
+        try {
+          encryptedData = EncryptionService.encrypt(content, sender, receiver);
+        } catch (error) {
+          console.error('Server encryption failed:', error);
+          encryptedData = null;
+        }
+      }
 
-    await newMessage.save();
-
-    const populatedMsg = await Message.findById(newMessage._id)
-      .populate("sender", "username firstname lastname profilePicture")
-      .populate("receiver", "username firstname lastname profilePicture")
-      .populate({
-        path: "replyTo",
-        populate: { path: "sender", select: "username firstname lastname profilePicture _id" },
+      // ✅ Create message with encrypted content
+      const newMessage = new Message({
+        sender,
+        receiver,
+        content: encryptedData ? "" : (content || ""), // Store empty if encrypted
+        encryptedContent: encryptedData, // Store encrypted data
+        messageType: finalMessageType,
+        fileUrl,
+        replyTo: replyTo || null,
       });
 
-    // Socket relay - send the message
-    io.to(receiver.toString()).emit("receiveMessage", populatedMsg);
+      console.log('💾 Saving message with encryptedContent:', !!encryptedData);
 
-    res.status(201).json({ success: true, chatMessage: populatedMsg });
-  } catch (error) {
-    console.error('Send message error:', error);
-    res.status(500).json({ message: error.message });
-  }
-};
+      await newMessage.save();
+
+      const populatedMsg = await Message.findById(newMessage._id)
+        .populate("sender", "username firstname lastname profilePicture")
+        .populate("receiver", "username firstname lastname profilePicture")
+        .populate({
+          path: "replyTo",
+          populate: { path: "sender", select: "username firstname lastname profilePicture _id" },
+        });
+
+      // Socket relay - send the message
+      io.to(receiver.toString()).emit("receiveMessage", populatedMsg);
+
+      res.status(201).json({ success: true, chatMessage: populatedMsg });
+    } catch (error) {
+      console.error('Send message error:', error);
+      res.status(500).json({ message: error.message });
+    }
+  };
   // Edit message with encryption
   const editMessage = async (req, res) => {
+
+    console.log(req.body);
+    console.log(res);
+
     const { messageId, newContent, content, encryptedContent } = req.body;
-    const updatedText = newContent !== undefined ? newContent : content;
+    // Pick whichever non-empty string is available
+  const updatedText = (newContent && newContent.trim()) ? newContent : content;
 
-    if (!updatedText || typeof updatedText !== "string" || !updatedText.trim()) {
-      return res.status(400).json({ message: "Updated message content cannot be empty." });
-    }
+  if (!encryptedContent && (!updatedText || typeof updatedText !== "string" || !updatedText.trim())) {
+    return res.status(400).json({ message: "Updated message content cannot be empty." });
+  }
 
-    if (!messageId) {
-      return res.status(400).json({ message: "messageId is required." });
-    }
+  if (!messageId) {
+    return res.status(400).json({ message: "messageId is required." });
+  }
 
     try {
       if (!mongoose.Types.ObjectId.isValid(messageId)) {

@@ -12,8 +12,35 @@ export const sendMessage = (data) => {
   });
 };
 
-export const editMessage = ({ messageId, newContent, userId }) => 
-  api.put('/api/chat/editmessage', { messageId, newContent, userId });
+export const editMessage = ({ 
+  messageId, 
+  id, 
+  newContent, 
+  content, 
+  userId,
+  encryptedContent 
+}) => {
+  const targetId = messageId || id;
+  const targetContent = newContent !== undefined ? newContent : content;
+
+  const payload = {
+    messageId: targetId,
+    id: targetId,
+    newContent: targetContent,
+    content: targetContent,
+    userId,
+  };
+
+  // ✅ Check if backend expects stringified encrypted content
+  if (encryptedContent) {
+    // If the backend expects a string:
+    payload.encryptedContent = JSON.stringify(encryptedContent);
+    // OR if it expects the object directly:
+    // payload.encryptedContent = encryptedContent;
+  }
+
+  return api.put('/api/chat/editmessage', payload);
+};
 
 export const toggleReaction = ({ messageId, emoji }) =>
   api.put('/api/chat/reaction', { messageId, emoji });

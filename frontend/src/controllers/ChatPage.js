@@ -122,15 +122,24 @@ export const handleEditMessage = async ({
         // Get the updated message object from the response payload
         const updatedMessage = response.data?.updatedMessage || response.data?.data || response.data;
 
+        // Preserve original position and creation timestamps
         setMessages((prev) =>
-            prev.map((msg) =>
-                (msg._id || msg.id) === messageId
-                    ? { ...msg, ...updatedMessage, content: newContent, isEdited: true }
-                    : msg
-            )
+            prev.map((msg) => {
+                if (String(msg._id || msg.id) === String(messageId)) {
+                    return {
+                        ...msg, // Preserve original creation dates & structure
+                        content: newContent,
+                        decryptedContent: newContent,
+                        text: newContent,
+                        isEdited: true,
+                        lastEditedAt: updatedMessage?.lastEditedAt || new Date()
+                    };
+                }
+                return msg;
+            })
         );
 
-        if (socket?.connected) {
+        if (socket?.connected && updatedMessage) {
             socket.emit('editMessage', updatedMessage);
         }
 
@@ -242,9 +251,10 @@ export const createEditMessageHandler = ({ setMessages }) => {
                 const currentId = msg._id || msg.id;
                 if (String(currentId) === String(updatedId)) {
                     return {
-                        ...msg,
-                        ...updatedMessage,
-                        content: updatedMessage.content,
+                        ...msg, // Keeps original createdAt and array order intact
+                        content: updatedMessage.content || msg.content,
+                        decryptedContent: updatedMessage.content || msg.decryptedContent,
+                        text: updatedMessage.content || msg.text,
                         isEdited: true,
                         lastEditedAt: updatedMessage.lastEditedAt || new Date()
                     };
@@ -254,7 +264,6 @@ export const createEditMessageHandler = ({ setMessages }) => {
         );
     };
 };
-
 
 export const createDeleteMessageHandler = ({ setMessages }) => {
     return (deletedData) => {
